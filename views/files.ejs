@@ -2,6 +2,12 @@
 <html>
   <head>
     <title>Files</title>
+    <meta content="PrintedWaste Files" name="description" />
+    <link
+      rel="icon"
+      type="image/png"
+      href="https://cdn.discordapp.com/attachments/1061755202086125678/1085013775893143563/Boosteriod_Rounded.png"
+    />
     <script>
       function formatFileSize(size) {
         const units = ["B", "KB", "MB", "GB", "TB"];
@@ -95,13 +101,33 @@
         text-decoration: none;
         /*make it bigger*/
         font-size: 110%;
-        
+      }
+      /* Search bar */
+      .search {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 20px auto;
+        max-width: 600px;
       }
 
-      @media (max-width: 480px) {
-        .heading {
-          font-size: 24px;
-        }
+      .search input[type="text"] {
+        width: 80%;
+        padding: 10px;
+        border: none;
+        border-radius: 5px;
+        font-size: 16px;
+        background-color: #282828;
+        color: #ffffff;
+        outline: none;
+      }
+
+      .search button[type="submit"] {
+        display: none;
+      }
+
+      .search button[type="submit"] i {
+        display: none;
       }
     </style>
   </head>
@@ -110,6 +136,12 @@
       <a href="./files/upload/public">
         <h1 class="heading">Files</h1>
       </a>
+
+      <form class="search">
+        <input type="text" name="q" placeholder="Search..." id="searchInput" />
+        <button type="submit"><i class="fa fa-search"></i></button>
+      </form>
+
       <ul class="files">
         <% files.forEach(function(file) { %> <% if (file && file.mimetype &&
         file.mimetype.includes('image')) { %>
@@ -133,5 +165,23 @@
         <% } %> <% }); %>
       </ul>
     </div>
+    <script>
+      const searchInput = document.getElementById("searchInput");
+      const files = document.getElementsByClassName("file");
+
+      searchInput.addEventListener("input", function () {
+        const searchQuery = searchInput.value.toLowerCase();
+        for (let file of files) {
+          const fileName = file
+            .querySelector(".file-name a")
+            .textContent.toLowerCase();
+          if (fileName.includes(searchQuery)) {
+            file.style.display = "flex";
+          } else {
+            file.style.display = "none";
+          }
+        }
+      });
+    </script>
   </body>
 </html>
