@@ -208,9 +208,8 @@ app.get("/files/upload/public", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "upload.html"));
 });
 
-app.get("/files/public/:filename", (req, res) => {
-  const filename = req.params.filename;
-  const filePath = path.join(publicUploadPath, filename);
+app.get("/files/public/*", (req, res) => {
+  const filePath = path.join(publicUploadPath, req.params[0]);
 
   // Check if requested path is a directory
   const stats = fs.statSync(filePath);
@@ -225,7 +224,7 @@ app.get("/files/public/:filename", (req, res) => {
       const fileData = [];
 
       files.forEach((file) => {
-        const filePath = path.join(publicUploadPath, filename, file);
+        const filePath = path.join(publicUploadPath, req.params[0], file);
         const stat = fs.statSync(filePath);
         const mimetype = mime.lookup(filePath);
         const fileSizeInBytes = stat.size;
@@ -251,6 +250,7 @@ app.get("/files/public/:filename", (req, res) => {
     return;
   }
 
+  const filename = path.basename(filePath);
   // Set the appropriate headers
   res.setHeader("Content-Type", "application/octet-stream");
   res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
@@ -259,6 +259,7 @@ app.get("/files/public/:filename", (req, res) => {
   const fileStream = fs.createReadStream(filePath);
   fileStream.pipe(res);
 });
+
 
 
 // serve static files from public directory
