@@ -333,7 +333,7 @@ app.get("/files/private/*", (req, res) => {
   }
 
   const ext = path.extname(filePath);
-  if ([".html", ".json", ".txt"].includes(ext)) {
+  if ([".html", ".json", ".txt", ".bat"].includes(ext)) {
     // If file has .html, .json, or .txt extension, render it
     res.sendFile(filePath);
   } else {
