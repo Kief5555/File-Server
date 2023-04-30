@@ -15,7 +15,7 @@ const winston = require("winston"); // Winston Logger
 const chalk = require("chalk"); // Chalk for console colors. Non esm module, so no import. The verion for non esm chalk is 2.4.2
 const mime = require("mime-types"); // Mime Types
 const bodyParser = require("body-parser");
-const cookieParser = require("cookie-parse");
+const cookieParser = require("cookie-parser");
 const Database = require("@replit/database"); //Database
 const db = new Database();
 
