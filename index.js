@@ -215,7 +215,8 @@ app.get("/files/upload/public", (req, res) => {
 });
 
 app.get("/files/public/*", (req, res) => {
-  const filePath = path.join(publicUploadPath, req.params[0], file);
+  const filePath = path.join(publicUploadPath, req.params[0]);
+
   // Check if requested path is a directory
   const stats = fs.statSync(filePath);
   if (stats.isDirectory()) {
