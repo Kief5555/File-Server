@@ -230,16 +230,22 @@ app.get("/files/public/*", (req, res) => {
       const fileData = [];
 
       files.forEach((file) => {
-        const filePath = path.join(publicUploadPath, req.params[0], file);
+        const filePath = path.join(publicUploadPath, file);
         const stat = fs.statSync(filePath);
         const mimetype = mime.lookup(filePath);
-        const fileSizeInBytes = stat.size;
-
+        let fileSizeInBytes = stat.size;
+        let folderName = path.basename(publicUploadPath);
+  
+        if (stat.isDirectory()) {
+          fileSizeInBytes = "";
+          folderName = folderName + "/";
+        }
+  
         fileData.push({
           filename: file,
           mimetype: mimetype || "unknown",
           size: fileSizeInBytes,
-          folder: "public/" + req.params[0],
+          folder: folderName,
         });
       });
 
@@ -314,9 +320,13 @@ app.get("/", (req, res) => {
       const filePath = path.join(publicUploadPath, file);
       const stat = fs.statSync(filePath);
       const mimetype = mime.lookup(filePath);
-      const fileSizeInBytes = stat.size;
-      //get the folder name of the file
-      const folderName = path.basename(publicUploadPath);
+      let fileSizeInBytes = stat.size;
+      let folderName = path.basename(publicUploadPath);
+
+      if (stat.isDirectory()) {
+        fileSizeInBytes = "";
+        file = file + "/";
+      }
 
       fileData.push({
         filename: file,
@@ -332,6 +342,7 @@ app.get("/", (req, res) => {
     });
   });
 });
+
 
 app.get("/login", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "login.html"));
