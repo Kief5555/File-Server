@@ -2,3 +2,6 @@ logs.log
 users.db
 node_modules
 package-lock.json
+/uploads/public/*
+/uploads/private/*
+yarn.lock
