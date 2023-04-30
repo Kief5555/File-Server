@@ -230,7 +230,7 @@ app.get("/files/public/*", (req, res) => {
       const fileData = [];
 
       files.forEach((file) => {
-        const filePath = path.join(publicUploadPath, file);
+        const filePath = path.join(publicUploadPath, req.params[0], file);
         const stat = fs.statSync(filePath);
         const mimetype = mime.lookup(filePath);
         let fileSizeInBytes = stat.size;
