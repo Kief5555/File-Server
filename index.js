@@ -100,6 +100,7 @@ const logFileRequest = () => {
 
 // set up public and private upload directories
 const publicUploadPath = path.join(__dirname, "uploads", "public");
+const uploadPath = path.join(__dirname, "uploads");
 const privateUploadPath = path.join(__dirname, "uploads", "private");
 
 // create separate multer instances for public and private uploads
@@ -159,14 +160,13 @@ function authorizeMiddleware(req, res, next) {
 
   authorize(username, password, (authorized) => {
     if (authorized) {
-      next()
+      next();
     } else {
       // User is not authorized
-      res.status(401).json({ message: 'Unauthorized.' });
+      res.status(401).json({ message: "Unauthorized." });
     }
   });
 }
-
 
 // Define the login endpoint
 app.post("/login", (req, res) => {
@@ -177,7 +177,11 @@ app.post("/login", (req, res) => {
     if (authorized) {
       res.cookie("username", username);
       res.cookie("password", password);
-      res.status(200).json({ message: "Login successful", username: username, password: password });
+      res.status(200).json({
+        message: "Login successful",
+        username: username,
+        password: password,
+      });
     } else {
       res.status(401).json({ message: "Login failed" });
     }
@@ -233,6 +237,7 @@ app.get("/files/public/*", (req, res) => {
           filename: file,
           mimetype: mimetype || "unknown",
           size: fileSizeInBytes,
+          folder: "public/" + req.params[0],
         });
       });
 
@@ -260,8 +265,6 @@ app.get("/files/public/*", (req, res) => {
   fileStream.pipe(res);
 });
 
-
-
 // serve static files from public directory
 app.use(express.static(publicUploadPath));
 
@@ -287,7 +290,6 @@ app.post(
   }
 );
 
-
 app.get("/", (req, res) => {
   fs.readdir(publicUploadPath, (err, files) => {
     if (err) {
@@ -303,11 +305,14 @@ app.get("/", (req, res) => {
       const stat = fs.statSync(filePath);
       const mimetype = mime.lookup(filePath);
       const fileSizeInBytes = stat.size;
+      //get the folder name of the file
+      const folderName = path.basename(publicUploadPath);
 
       fileData.push({
         filename: file,
         mimetype: mimetype || "unknown",
         size: fileSizeInBytes,
+        folder: folderName,
       });
     });
 
@@ -318,8 +323,8 @@ app.get("/", (req, res) => {
   });
 });
 
-app.get('/login', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+app.get("/login", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "login.html"));
 });
 
 // start server
