@@ -307,12 +307,12 @@ app.get("/files/private/*", (req, res) => {
           folderName = folderName + "/";
         }
 
-        fileData.push({
+        /*fileData.push({
           filename: file,
           mimetype: mimetype || "unknown",
           size: fileSizeInBytes,
-          folder: "public/" + req.params[0],
-        });
+          folder: "private/" + req.params[0],
+        });*/
       });
 
       res.render("files", {
@@ -512,12 +512,12 @@ app.get("/private", (req, res) => {
         file = file + "/";
       }
 
-      fileData.push({
+      /*fileData.push({
         filename: file,
         mimetype: mimetype || "unknown",
         size: fileSizeInBytes,
         folder: folderName,
-      });
+      });*/
     });
 
     res.render("files", {
