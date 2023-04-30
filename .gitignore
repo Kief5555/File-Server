@@ -1,0 +1,4 @@
+logs.log
+node_modules
+users.db
+package-lock.json
