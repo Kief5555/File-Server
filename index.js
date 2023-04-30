@@ -212,6 +212,40 @@ app.get("/files/public/:filename", (req, res) => {
   const filename = req.params.filename;
   const filePath = path.join(publicUploadPath, filename);
 
+  // Check if requested path is a directory
+  const stats = fs.statSync(filePath);
+  if (stats.isDirectory()) {
+    fs.readdir(filePath, (err, files) => {
+      if (err) {
+        console.error(err);
+        res.status(500).send("Internal server error");
+        return;
+      }
+
+      const fileData = [];
+
+      files.forEach((file) => {
+        const filePath = path.join(publicUploadPath, filename, file);
+        const stat = fs.statSync(filePath);
+        const mimetype = mime.lookup(filePath);
+        const fileSizeInBytes = stat.size;
+
+        fileData.push({
+          filename: file,
+          mimetype: mimetype || "unknown",
+          size: fileSizeInBytes,
+        });
+      });
+
+      res.render("files", {
+        files: fileData,
+        formatFileSize,
+      });
+    });
+    return;
+  }
+
+  // If requested path is not a directory, serve the file
   if (!fs.existsSync(filePath)) {
     res.status(404).send("File not found.");
     return;
@@ -225,6 +259,7 @@ app.get("/files/public/:filename", (req, res) => {
   const fileStream = fs.createReadStream(filePath);
   fileStream.pipe(res);
 });
+
 
 // serve static files from public directory
 app.use(express.static(publicUploadPath));
