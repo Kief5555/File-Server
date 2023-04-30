@@ -1,4 +1,4 @@
 logs.log
-node_modules
 users.db
+node_modules
 package-lock.json

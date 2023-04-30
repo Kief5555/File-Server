@@ -7305,6 +7305,20 @@
         (e.supported = po),
           Object.defineProperty(e, "__esModule", { value: !0 });
       });
+      window.addEventListener("load", function () {
+        const loginstatus = document.getElementById("loginstatus");
+        //Check cookies for username
+        if (document.cookie.indexOf("username") >= 0) {
+          loginstatus.innerHTML = `Logged in as ${
+            document.cookie
+              .split(";")
+              .find((item) => item.includes("username"))
+              .split("=")[1]
+          }`;
+        } else {
+          loginstatus.innerHTML = "Login";
+        }
+      });
     </script>
     <script>
       const inputElement = document.querySelector(".filepond");

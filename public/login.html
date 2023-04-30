@@ -56,15 +56,18 @@
             localStorage.setItem("loggedIn", false);
             localStorage.removeItem("username");
             localStorage.removeItem("password");
+            //delete cookies, just delete
+            document.cookie =
+              "username=; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
+            document.cookie =
+              "password=; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
             showPopupBox("Logged out successfully!", "🎉", 5000);
             document.getElementById("logstatus").textContent =
-              "Logged out successfully! Going back in 5 seconds...";
+              "Logged out successfully! Going back in 3 seconds...";
             setTimeout(() => {
-              const previousUrl = document.referrer;
-
-              // Reload the previous URL to clear the cache
-              window.location.replace(previousUrl);
-            }, 5000);
+              const previousUrl = document.referrer || document.location.href;
+              window.history.go(-1);
+            }, 2500);
           } else {
             const xhr = new XMLHttpRequest();
             const url = "/login";
@@ -98,12 +101,13 @@
                   showPopupBox("Logged in successfully!", "🎉", 5000);
 
                   document.getElementById("logstatus").textContent =
-                    "Logged in successfully! Going back in 5 seconds...";
+                    "Logged in successfully! Going back in 3 seconds...";
 
                   setTimeout(() => {
-                    const previousUrl = document.referrer;
-                    window.location.replace(previousUrl);
-                  }, 5000);
+                    const previousUrl =
+                      document.referrer || document.location.href;
+                    window.history.go(-1);
+                  }, 2500);
                 } else if (xhr.status === 401 || xhr.status === 403) {
                   const response = JSON.parse(xhr.responseText);
 

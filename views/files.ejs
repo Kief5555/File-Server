@@ -93,6 +93,9 @@
       a:hover {
         color: #ffffff;
         text-decoration: none;
+        /*make it bigger*/
+        font-size: 110%;
+        
       }
 
       @media (max-width: 480px) {
@@ -111,12 +114,20 @@
         <% files.forEach(function(file) { %> <% if (file && file.mimetype &&
         file.mimetype.includes('image')) { %>
         <li class="file">
-          <div class="file-name"><%= file.filename %></div>
+          <div class="file-name">
+            <a href="/files/public/<%= file.filename %>"
+              ><%= file.filename %></a
+            >
+          </div>
           <div class="file-size"><%= formatFileSize(file.size) %></div>
         </li>
         <% } else { %>
         <li class="file">
-          <div class="file-name"><%= file.filename %></div>
+          <div class="file-name">
+            <a href="/files/public/<%= file.filename %>"
+              ><%= file.filename %></a
+            >
+          </div>
           <div class="file-size"><%= formatFileSize(file.size) %></div>
         </li>
         <% } %> <% }); %>
