@@ -287,11 +287,28 @@ app.use(express.static(publicUploadPath));
 // handle public uploads
 app.post(
   "/api/upload/public",
-  authorizeMiddleware, // add the authorization middleware here
-  publicUpload.single("filepond"),
-  logRequest(),
+  authorizeMiddleware,
   (req, res) => {
-    res.json({ message: "File uploaded successfully." });
+    const folder = req.query.folder || ""; // default to root folder if no folder specified
+    const uploadPath = path.join(publicUploadPath, folder);
+    const storage = multer.diskStorage({
+      destination: uploadPath,
+      filename: (req, file, callback) => {
+        const fileName = file.originalname;
+        callback(null, fileName);
+      },
+    });
+    const upload = multer({ storage: storage }).single("filepond");
+
+    upload(req, res, (err) => {
+      if (err) {
+        console.error(err);
+        res.status(500).send("Internal server error");
+        return;
+      }
+
+      res.json({ message: "File uploaded successfully." });
+    });
   }
 );
 
