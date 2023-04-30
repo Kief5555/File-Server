@@ -327,11 +327,11 @@ app.get("/files/private/*", (req, res) => {
   }
 
   // If requested path is not a directory, serve the file
-  /*
+  
   if (!fs.existsSync(filePath)) {
     res.status(404).send("File not found.");
     return;
-  }*/
+  }
 
   const ext = path.extname(filePath);
   if ([".html", ".json", ".txt",].includes(ext)) {
