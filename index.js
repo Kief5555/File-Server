@@ -361,6 +361,46 @@ app.get("/", (req, res) => {
 });
 
 
+
+app.get("/private", (req, res) => {
+  fs.readdir(privateUploadPath, (err, files) => {
+    if (err) {
+      console.error(err);
+      res.status(500).send("Internal server error");
+      return;
+    }
+
+    const fileData = [];
+
+    files.forEach((file) => {
+      const filePath = path.join(privateUploadPath, file);
+      const stat = fs.statSync(filePath);
+      const mimetype = mime.lookup(filePath);
+      let fileSizeInBytes = stat.size;
+      let folderName = path.basename(privateUploadPath);
+
+      if (stat.isDirectory()) {
+        fileSizeInBytes = "";
+        file = file + "/";
+      }
+
+      fileData.push({
+        filename: file,
+        mimetype: mimetype || "unknown",
+        size: fileSizeInBytes,
+        folder: folderName,
+      });
+    });
+
+    res.render("files", {
+      files: fileData,
+      formatFileSize,
+    });
+  });
+});
+
+
+
 app.get("/login", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "login.html"));
 });
