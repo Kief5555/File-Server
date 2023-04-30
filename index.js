@@ -245,7 +245,7 @@ app.get("/files/public/*", (req, res) => {
           filename: file,
           mimetype: mimetype || "unknown",
           size: fileSizeInBytes,
-          folder: folderName,
+          folder: "public/" + req.params[0],
         });
       });
 
