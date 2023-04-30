@@ -12,6 +12,7 @@
   "author": "Kief#2583",
   "license": "MIT",
   "dependencies": {
+    "@replit/database": "^2.0.3",
     "body-parser": "^1.20.2",
     "chalk": "^2.4.2",
     "cookie-parser": "^1.4.6",
