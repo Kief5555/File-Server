@@ -190,6 +190,8 @@ app.post("/login", (req, res) => {
 
 // Define the signup endpoint
 app.post("/signup", (req, res) => {
+  res.status(403).json({ message: "Signup is not available" });
+  return;
   const username = req.body.username;
   const password = req.body.password;
 
@@ -255,15 +257,23 @@ app.get("/files/public/*", (req, res) => {
     return;
   }
 
-  const filename = path.basename(filePath);
-  // Set the appropriate headers
-  res.setHeader("Content-Type", "application/octet-stream");
-  res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
+  const ext = path.extname(filePath);
+  if ([".html", ".json", ".txt"].includes(ext)) {
+    // If file has .html, .json, or .txt extension, render it
+    res.sendFile(filePath);
+  } else {
+    // Otherwise, download the file
+    const filename = path.basename(filePath);
+    // Set the appropriate headers
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
 
-  // Create a read stream and pipe it to the response object
-  const fileStream = fs.createReadStream(filePath);
-  fileStream.pipe(res);
+    // Create a read stream and pipe it to the response object
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.pipe(res);
+  }
 });
+
 
 // serve static files from public directory
 app.use(express.static(publicUploadPath));
