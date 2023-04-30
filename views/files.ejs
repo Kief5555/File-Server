@@ -147,7 +147,7 @@
         file.mimetype.includes('image')) { %>
         <li class="file">
           <div class="file-name">
-            <a href="/files/public/<%= file.filename %>"
+            <a href="/files/public/<%= file.folder %>/<%= file.filename %>"
               ><%= file.filename %></a
             >
           </div>
@@ -156,7 +156,7 @@
         <% } else { %>
         <li class="file">
           <div class="file-name">
-            <a href="/files/public/<%= file.filename %>"
+            <a href="/files/public/<%= file.folder %>/<%= file.filename %>"
               ><%= file.filename %></a
             >
           </div>
