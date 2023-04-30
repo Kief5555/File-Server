@@ -289,7 +289,7 @@ app.post(
 
 
 app.get("/", (req, res) => {
-  fs.readdir(publicUploadPath, { withFileTypes: true }, (err, files) => {
+  fs.readdir(publicUploadPath, (err, files) => {
     if (err) {
       console.error(err);
       res.status(500).send("Internal server error");
@@ -299,37 +299,16 @@ app.get("/", (req, res) => {
     const fileData = [];
 
     files.forEach((file) => {
-      if (file.isDirectory()) {
-        // If the file is a directory, read its contents recursively
-        const subDirPath = path.join(publicUploadPath, file.name);
-        const subFiles = fs.readdirSync(subDirPath, { withFileTypes: true });
-        subFiles.forEach((subFile) => {
-          const filePath = path.join(subDirPath, subFile.name);
-          const stat = fs.statSync(filePath);
-          const mimetype = mime.lookup(filePath);
-          const fileSizeInBytes = stat.size;
+      const filePath = path.join(publicUploadPath, file);
+      const stat = fs.statSync(filePath);
+      const mimetype = mime.lookup(filePath);
+      const fileSizeInBytes = stat.size;
 
-          fileData.push({
-            filename: subFile.name,
-            mimetype: mimetype || "unknown",
-            size: fileSizeInBytes,
-            folder: file.name // Add the directory path to the object
-          });
-        });
-      } else {
-        // If the file is a regular file, add it to the fileData object
-        const filePath = path.join(publicUploadPath, file.name);
-        const stat = fs.statSync(filePath);
-        const mimetype = mime.lookup(filePath);
-        const fileSizeInBytes = stat.size;
-
-        fileData.push({
-          filename: file.name,
-          mimetype: mimetype || "unknown",
-          size: fileSizeInBytes,
-          folder: "" // No directory path for regular files
-        });
-      }
+      fileData.push({
+        filename: file,
+        mimetype: mimetype || "unknown",
+        size: fileSizeInBytes,
+      });
     });
 
     res.render("files", {
@@ -338,7 +317,6 @@ app.get("/", (req, res) => {
     });
   });
 });
-
 
 app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
