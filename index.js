@@ -299,7 +299,7 @@ app.get("/files/private/*", (req, res) => {
       const fileData = [];
 
       files.forEach((file) => {
-        const filePath = path.join([privateUploadPath], req.params[0], file);
+        const filePath = path.join(privateUploadPath, req.params[0], file);
         const stat = fs.statSync(filePath);
         const mimetype = mime.lookup(filePath);
         let fileSizeInBytes = stat.size;
