@@ -147,18 +147,18 @@
         file.mimetype.includes('image')) { %>
         <li class="file">
           <div class="file-name">
-            <a href="/files/public/<%= file.folder %>/<%= file.filename %>"
-              ><%= file.filename %></a
-            >
+            <a href="<%= '/files/public/' + (file.folder ? file.folder + '/' : '') + file.filename %>">
+              <%= file.filename %>
+            </a>
           </div>
           <div class="file-size"><%= formatFileSize(file.size) %></div>
         </li>
         <% } else { %>
         <li class="file">
           <div class="file-name">
-            <a href="/files/public/<%= file.folder %>/<%= file.filename %>"
-              ><%= file.filename %></a
-            >
+            <a href="<%= '/files/public/' + (file.folder ? file.folder + '/' : '') + file.filename %>">
+              <%= file.filename %>
+            </a>
           </div>
           <div class="file-size"><%= formatFileSize(file.size) %></div>
         </li>

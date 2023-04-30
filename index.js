@@ -304,10 +304,14 @@ app.get("/", (req, res) => {
       const mimetype = mime.lookup(filePath);
       const fileSizeInBytes = stat.size;
 
+      // Construct the full href for the file
+      const href = "/files/public/" + (file.folder ? file.folder + "/" : "") + file.filename;
+
       fileData.push({
-        filename: file,
+        filename: file.filename,
         mimetype: mimetype || "unknown",
         size: fileSizeInBytes,
+        href: href
       });
     });
 
@@ -317,6 +321,7 @@ app.get("/", (req, res) => {
     });
   });
 });
+
 
 app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
