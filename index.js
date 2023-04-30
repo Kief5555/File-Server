@@ -281,6 +281,75 @@ app.get("/files/public/*", (req, res) => {
 });
 
 
+
+
+app.get("/files/private/*", (req, res) => {
+  const filePath = path.join(privateUploadPath, req.params[0]);
+
+  // Check if requested path is a directory
+  const stats = fs.statSync(filePath);
+  if (stats.isDirectory()) {
+    fs.readdir(filePath, (err, files) => {
+      if (err) {
+        console.error(err);
+        res.status(500).send("Internal server error");
+        return;
+      }
+
+      const fileData = [];
+
+      files.forEach((file) => {
+        const filePath = path.join([privateUploadPath], req.params[0], file);
+        const stat = fs.statSync(filePath);
+        const mimetype = mime.lookup(filePath);
+        let fileSizeInBytes = stat.size;
+        let folderName = path.basename(privateUploadPath);
+  
+        if (stat.isDirectory()) {
+          fileSizeInBytes = "";
+          folderName = folderName + "/";
+        }
+  
+        fileData.push({
+          filename: file,
+          mimetype: mimetype || "unknown",
+          size: fileSizeInBytes,
+          folder: "public/" + req.params[0],
+        });
+      });
+
+      res.render("files", {
+        files: fileData,
+        formatFileSize,
+      });
+    });
+    return;
+  }
+
+  // If requested path is not a directory, serve the file
+  if (!fs.existsSync(filePath)) {
+    res.status(404).send("File not found.");
+    return;
+  }
+
+  const ext = path.extname(filePath);
+  if ([".html", ".json", ".txt"].includes(ext)) {
+    // If file has .html, .json, or .txt extension, render it
+    res.sendFile(filePath);
+  } else {
+    // Otherwise, download the file
+    const filename = path.basename(filePath);
+    // Set the appropriate headers
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
+
+    // Create a read stream and pipe it to the response object
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.pipe(res);
+  }
+});
+
+
 // serve static files from public directory
 app.use(express.static(publicUploadPath));
 
