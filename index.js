@@ -382,7 +382,8 @@ app.post("/files/private/*", (req, res) => {
     res.status(404).send("File not found.");
     return;
   }
-
+res.status(401).json({ message: "Unauthorized." });
+/*
   const ext = path.extname(filePath);
   if ([".html", ".json", ".txt"].includes(ext)) {
     // If file has .html, .json, or .txt extension, render it
@@ -398,6 +399,7 @@ app.post("/files/private/*", (req, res) => {
     const fileStream = fs.createReadStream(filePath);
     fileStream.pipe(res);
   }
+  */
 });
 
 // serve static files from public directory
