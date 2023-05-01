@@ -308,12 +308,12 @@ app.get("/files/private/*", (req, res) => {
           folderName = folderName + "/";
         }
 
-        /*fileData.push({
+        fileData.push({
           filename: file,
           mimetype: mimetype || "unknown",
           size: fileSizeInBytes,
           folder: "private/" + req.params[0],
-        });*/
+        });
       });
 
       res.render("files", {
