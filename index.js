@@ -17,7 +17,7 @@ const mime = require("mime-types"); // Mime Types
 const sqlite3 = require("sqlite3").verbose();
 const bodyParser = require("body-parser");
 const cookieParser = require("cookie-parser");
-require('dotenv').config()
+require("dotenv").config();
 
 app.set("view engine", "ejs");
 app.use(cors()); //CORS Policy
@@ -144,14 +144,11 @@ function authorize(username, password, callback) {
     (err, row) => {
       if (err) {
         callback(false);
-        return false;
       } else {
         if (row) {
           callback(true);
-          return true;
         } else {
           callback(false);
-          return false;
         }
       }
     }
@@ -328,35 +325,37 @@ app.get("/files/private/*", (req, res) => {
   }
   const { username, password } = req.cookies;
   const passwordAuth = req.query.password;
-
-  if (!authorize(username, password)) {
-    res.status(401).json({ message: "Unauthorized." });
-  } else if (passwordAuth !== process.env.privatepasswd) {
-    res.status(401).json({ message: "Unauthorized." });
-  } else {
-    // If requested path is not a directory, serve the file
-
-    if (!fs.existsSync(filePath)) {
-      res.status(404).send("File not found.");
-      return;
-    }
-
-    const ext = path.extname(filePath);
-    if ([".html", ".json", ".txt"].includes(ext)) {
-      // If file has .html, .json, or .txt extension, render it
-      res.sendFile(filePath);
+   authorize(username, password, async (authorized) => {
+    if (passwordAuth !== process.env.privatepasswd && authorized == false) {
+      res.status(401).json({ message: "Unauthorized." });
     } else {
-      // Otherwise, download the file
-      const filename = path.basename(filePath);
-      // Set the appropriate headers
-      res.setHeader("Content-Type", "application/octet-stream");
-      res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
+      // If requested path is not a directory, serve the file
 
-      // Create a read stream and pipe it to the response object
-      const fileStream = fs.createReadStream(filePath);
-      fileStream.pipe(res);
+      if (!fs.existsSync(filePath)) {
+        res.status(404).send("File not found.");
+        return;
+      }
+
+      const ext = path.extname(filePath);
+      if ([".html", ".json", ".txt"].includes(ext)) {
+        // If file has .html, .json, or .txt extension, render it
+        res.sendFile(filePath);
+      } else {
+        // Otherwise, download the file
+        const filename = path.basename(filePath);
+        // Set the appropriate headers
+        res.setHeader("Content-Type", "application/octet-stream");
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename=${filename}`
+        );
+
+        // Create a read stream and pipe it to the response object
+        const fileStream = fs.createReadStream(filePath);
+        fileStream.pipe(res);
+      }
     }
-  }
+  });
 });
 
 //Cert util support
@@ -372,33 +371,7 @@ app.post("/files/private/*", (req, res) => {
         res.status(500).send("Internal server error");
         return;
       }
-
-      const fileData = [];
-
-      files.forEach((file) => {
-        const filePath = path.join(privateUploadPath, req.params[0], file);
-        const stat = fs.statSync(filePath);
-        const mimetype = mime.lookup(filePath);
-        let fileSizeInBytes = stat.size;
-        let folderName = path.basename(privateUploadPath);
-
-        if (stat.isDirectory()) {
-          fileSizeInBytes = "";
-          folderName = folderName + "/";
-        }
-
-        fileData.push({
-          filename: file,
-          mimetype: mimetype || "unknown",
-          size: fileSizeInBytes,
-          folder: "public/" + req.params[0],
-        });
-      });
-
-      res.render("files", {
-        files: fileData,
-        formatFileSize,
-      });
+      res.status(401).json({ message: "Unauthorized." });
     });
     return;
   }
