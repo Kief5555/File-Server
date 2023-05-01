@@ -5,3 +5,4 @@ package-lock.json
 /uploads/public/*
 /uploads/private/*
 yarn.lock
+.env
