@@ -497,12 +497,12 @@ app.get("/private", (req, res) => {
         file = file + "/";
       }
 
-      /*fileData.push({
+      fileData.push({
         filename: file,
         mimetype: mimetype || "unknown",
         size: fileSizeInBytes,
         folder: folderName,
-      });*/
+      });
     });
 
     res.render("files", {
