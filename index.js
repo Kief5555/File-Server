@@ -100,7 +100,9 @@ const logFileRequest = () => {
 };
 
 // set up public and private upload directories
-const publicUploadPath = path.join(__dirname, "uploads", "public");
+const publicUploadPath = path
+  .join(__dirname, "uploads", "public")
+  .replace(/\/+$/, ""); // replace trailing slash
 const uploadPath = path.join(__dirname, "uploads");
 const privateUploadPath = path.join(__dirname, "uploads", "private");
 
@@ -216,9 +218,12 @@ app.get("/files/upload/public", (req, res) => {
 });
 
 app.get("/files/public/*", (req, res) => {
-  const filePath = path.join(publicUploadPath, req.params[0]);
-
+  const filePath = path.resolve(publicUploadPath, req.params[0]);
   // Check if requested path is a directory
+  if (!fs.existsSync(filePath)) {
+    res.status(404).send("File not found.");
+    return;
+  }
   const stats = fs.statSync(filePath);
   if (stats.isDirectory()) {
     fs.readdir(filePath, (err, files) => {
@@ -236,17 +241,24 @@ app.get("/files/public/*", (req, res) => {
         const mimetype = mime.lookup(filePath);
         let fileSizeInBytes = stat.size;
         let folderName = path.basename(publicUploadPath);
+        //Check if file or folder and set boolean true if folder
+        let isDirectoryFile = false;
 
         if (stat.isDirectory()) {
           fileSizeInBytes = "";
-          folderName = folderName + "/";
+          folderName = folderName
+          isDirectoryFile = true;
         }
 
+
+        //Remove the extra / at the end of the path
+        const folder = path.join("public", req.params[0]).replace(/\/+$/, "");
         fileData.push({
           filename: file,
           mimetype: mimetype || "unknown",
           size: fileSizeInBytes,
-          folder: "public/" + req.params[0],
+          folder: folder,
+          isDirectoryFile: isDirectoryFile,
         });
       });
 
@@ -270,15 +282,15 @@ app.get("/files/public/*", (req, res) => {
     res.sendFile(filePath);
   } else {
     try {
-    // Otherwise, download the file
-    const filename = path.basename(filePath);
-    // Set the appropriate headers
-    res.setHeader("Content-Type", "application/octet-stream");
-    res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
+      // Otherwise, download the file
+      const filename = path.basename(filePath);
+      // Set the appropriate headers
+      res.setHeader("Content-Type", "application/octet-stream");
+      res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
 
-    // Create a read stream and pipe it to the response object
-    const fileStream = fs.createReadStream(filePath);
-    fileStream.pipe(res);
+      // Create a read stream and pipe it to the response object
+      const fileStream = fs.createReadStream(filePath);
+      fileStream.pipe(res);
     } catch {
       res.status(500).send("Internal server error (File not found?)");
     }
@@ -329,7 +341,7 @@ app.get("/files/private/*", (req, res) => {
   }
   const { username, password } = req.cookies;
   const passwordAuth = req.query.password;
-   authorize(username, password, async (authorized) => {
+  authorize(username, password, async (authorized) => {
     if (passwordAuth !== process.env.privatepasswd && authorized == false) {
       res.status(401).json({ message: "Unauthorized." });
     } else {
@@ -386,7 +398,7 @@ app.post("/files/private/*", (req, res) => {
     res.status(404).send("File not found.");
     return;
   }
-//res.status(401).json({ message: "Unauthorized." });
+  //res.status(401).json({ message: "Unauthorized." });
 
   const ext = path.extname(filePath);
   if ([".html", ".json", ".txt"].includes(ext)) {
@@ -403,7 +415,6 @@ app.post("/files/private/*", (req, res) => {
     const fileStream = fs.createReadStream(filePath);
     fileStream.pipe(res);
   }
-  
 });
 
 // serve static files from public directory
@@ -447,17 +458,23 @@ app.get("/", (req, res) => {
       const mimetype = mime.lookup(filePath);
       let fileSizeInBytes = stat.size;
       let folderName = path.basename(publicUploadPath);
-
+      //Check if file or folder and set boolean true if folder
+      let isDirectoryFile = false;
+      let filename = file;
       if (stat.isDirectory()) {
         fileSizeInBytes = "";
-        file = file + "/";
+        folderName = folderName + "/";
+        isDirectoryFile = false;
+        filename = file + "/";
       }
 
+      const folder = path.join("public");
       fileData.push({
-        filename: file,
+        filename: filename,
         mimetype: mimetype || "unknown",
         size: fileSizeInBytes,
-        folder: folderName,
+        folder: folder,
+        isDirectoryFile: isDirectoryFile,
       });
     });
 

@@ -143,53 +143,60 @@
       <a href="./files/upload/public">
         <h1 class="heading">Files</h1>
       </a>
-  
+
       <form class="search">
         <input type="text" name="q" placeholder="Search..." id="searchInput" />
         <button type="submit"><i class="fa fa-search"></i></button>
       </form>
-    
+
       <ul class="files">
-        <% files.forEach(function(file) { %>
-        <% if (file && file.mimetype && file.mimetype.includes('image')) { %>
+        <% files.forEach(function(file) { %> <% if (file && file.mimetype &&
+        file.mimetype.includes('image')) { %>
         <li class="file">
           <div class="file-name">
-            <% if (file.size) { %>
-              <a href="/files/<%= file.folder %>/<%= file.filename %>"
-                ><%= file.filename %></a
-              >
+            <% if (!file.size) { %>
+            <a href="/files/<%= file.folder %>/<%= file.filename %>"
+              ><%= file.filename %></a
+            >
+            <% } else if (file.isDirectoryFile) { %>
+            <a href="/files/<%= file.folder %><%= file.filename %>"
+              ><%= file.filename %></a
+            >
             <% } else { %>
-              <a href="/files/<%= file.folder %>/<%= file.filename %>"
-                ><%= file.filename %></a
-              >
-            <% } %>
+            <a href="/files/<%= file.folder %><%= file.filename %>"
+              ><%= file.filename %></a
+            >
+            <% }%>
           </div>
           <% if (file.size) { %>
-            <div class="file-size"><%= formatFileSize(file.size) %></div>
+          <div class="file-size"><%= formatFileSize(file.size) %></div>
           <% } %>
         </li>
         <% } else { %>
         <li class="file">
           <div class="file-name">
-            <% if (file.size) { %>
-              <a href="/files/<%= file.folder %>/<%= file.filename %>"
-                ><%= file.filename %></a
-              >
+            <% if (!file.size) { %>
+            <a href="/files/<%= file.folder %>/<%= file.filename %>"
+              ><%= file.filename %></a
+            >
+            <% } else if (file.isDirectoryFile) { %>
+            <a href="/files/<%= file.folder %><%= file.filename %>"
+              ><%= file.filename %></a
+            >
             <% } else { %>
-              <a href="/files/<%= file.folder %>/<%= file.filename %>"
-                ><%= file.filename %></a
-              >
+            <a href="/files/<%= file.folder %>/<%= file.filename %>"
+              ><%= file.filename %></a
+            >
             <% } %>
           </div>
           <% if (file.size) { %>
-            <div class="file-size"><%= formatFileSize(file.size) %></div>
+          <div class="file-size"><%= formatFileSize(file.size) %></div>
           <% } %>
         </li>
-        <% } %>
-        <% }); %>
+        <% } %> <% }); %>
       </ul>
-    </div>      
-    
+    </div>
+
     <script>
       const searchInput = document.getElementById("searchInput");
       const files = document.getElementsByClassName("file");
