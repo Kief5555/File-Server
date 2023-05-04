@@ -269,6 +269,7 @@ app.get("/files/public/*", (req, res) => {
     // If file has .html, .json, or .txt extension, render it
     res.sendFile(filePath);
   } else {
+    try {
     // Otherwise, download the file
     const filename = path.basename(filePath);
     // Set the appropriate headers
@@ -278,6 +279,9 @@ app.get("/files/public/*", (req, res) => {
     // Create a read stream and pipe it to the response object
     const fileStream = fs.createReadStream(filePath);
     fileStream.pipe(res);
+    } catch {
+      res.status(500).send("Internal server error (File not found?)");
+    }
   }
 });
 
