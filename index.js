@@ -283,11 +283,11 @@ app.get("/files/public/*", (req, res) => {
     try {
       const filename = path.basename(filePath);
 
-      // Set the appropriate headers for a file download
-      res.setHeader("Content-Type", "application/octet-stream");
-      res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
-      res.setHeader("Content-Length", stats.size);
-      res.sendFile(filePath);
+      res.download(filePath, filename, (err) => {
+        if (err) {
+          res.status(500).send("Internal server error (File not found?)");
+        }
+      });
     } catch {
       res.status(500).send("Internal server error (File not found?)");
     }
