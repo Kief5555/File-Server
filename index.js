@@ -19,6 +19,7 @@ const bodyParser = require("body-parser");
 const cookieParser = require("cookie-parser");
 require("dotenv").config();
 
+app.set("server.timeout", 300000);
 app.set("view engine", "ejs");
 app.use(cors()); //CORS Policy
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -286,9 +287,9 @@ app.get("/files/public/*", (req, res) => {
       res.download(filePath, filename, (err) => {
         if (err) {
           try {
-          res.status(500).send("Internal server error (File not found?)");
+            res.status(500).send("Internal server error (File not found?)");
           } catch {
-            console.log(err)
+            console.log(err);
           }
         }
       });
