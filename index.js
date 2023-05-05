@@ -282,15 +282,12 @@ app.get("/files/public/*", (req, res) => {
   } else {
     try {
       const filename = path.basename(filePath);
-      // Set the appropriate headers
+
+      // Set the appropriate headers for a file download
       res.setHeader("Content-Type", "application/octet-stream");
       res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
-
-      // Create a read stream and pipe it to the response object without chunking
-      const fileStream = fs.createReadStream(filePath, {
-        highWaterMark: Infinity,
-      });
-      fileStream.pipe(res);
+      res.setHeader("Content-Length", stats.size);
+      res.sendFile(filePath);
     } catch {
       res.status(500).send("Internal server error (File not found?)");
     }
