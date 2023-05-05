@@ -246,10 +246,9 @@ app.get("/files/public/*", (req, res) => {
 
         if (stat.isDirectory()) {
           fileSizeInBytes = "";
-          folderName = folderName
+          folderName = folderName;
           isDirectoryFile = true;
         }
-
 
         //Remove the extra / at the end of the path
         const folder = path.join("public", req.params[0]).replace(/\/+$/, "");
@@ -282,15 +281,8 @@ app.get("/files/public/*", (req, res) => {
     res.sendFile(filePath);
   } else {
     try {
-      // Otherwise, download the file
       const filename = path.basename(filePath);
-      // Set the appropriate headers
-      res.setHeader("Content-Type", "application/octet-stream");
-      res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
-
-      // Create a read stream and pipe it to the response object
-      const fileStream = fs.createReadStream(filePath);
-      fileStream.pipe(res);
+      res.download(filePath, filename);
     } catch {
       res.status(500).send("Internal server error (File not found?)");
     }
