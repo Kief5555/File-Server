@@ -281,11 +281,19 @@ app.get("/files/public/*", (req, res) => {
     res.sendFile(filePath);
   } else {
     try {
-      res.download(filePath);
+      const filename = path.basename(filePath);
+      // Set the appropriate headers
+      res.setHeader("Content-Type", "application/octet-stream");
+      res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
+
+      // Create a read stream and pipe it to the response object without chunking
+      const fileStream = fs.createReadStream(filePath, {
+        highWaterMark: Infinity,
+      });
+      fileStream.pipe(res);
     } catch {
       res.status(500).send("Internal server error (File not found?)");
     }
-    
   }
 });
 
