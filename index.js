@@ -285,7 +285,11 @@ app.get("/files/public/*", (req, res) => {
 
       res.download(filePath, filename, (err) => {
         if (err) {
+          try {
           res.status(500).send("Internal server error (File not found?)");
+          } catch {
+            console.log(err)
+          }
         }
       });
     } catch {
