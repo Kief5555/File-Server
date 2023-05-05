@@ -529,4 +529,7 @@ app.get("/login", (req, res) => {
 });
 
 // start server
-app.listen(3000, () => console.log("Server Online."));
+const server = app.listen(3000, () => console.log("Server Online."));
+
+server.setTimeout(300000);
+
