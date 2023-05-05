@@ -281,7 +281,7 @@ app.get("/files/public/*", (req, res) => {
     res.sendFile(filePath);
   } else {
     try {
-      res.sendFile(filePath);
+      res.download(filePath);
     } catch {
       res.status(500).send("Internal server error (File not found?)");
     }
