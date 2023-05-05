@@ -281,11 +281,11 @@ app.get("/files/public/*", (req, res) => {
     res.sendFile(filePath);
   } else {
     try {
-      const filename = path.basename(filePath);
-      res.download(filePath, filename);
+      res.sendFile(filePath);
     } catch {
       res.status(500).send("Internal server error (File not found?)");
     }
+    
   }
 });
 
