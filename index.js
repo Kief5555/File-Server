@@ -284,15 +284,15 @@ app.get("/files/public/*", (req, res) => {
     try {
       const filename = path.basename(filePath);
 
-      res.download(filePath, filename, (err) => {
+      res.download(filePath, (err) => {
         if (err) {
-          try {
-            res.status(500).send("Internal server error (File not found?)");
-          } catch {
-            console.log(err);
-          }
+          // Handle error, but keep in mind the response may be partially-sent
+          // so check res.headersSent
+          console.error(err);
+        } else {
+          // decrement a download credit, etc.
         }
-      });
+      })
     } catch {
       res.status(500).send("Internal server error (File not found?)");
     }
