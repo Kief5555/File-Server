@@ -104,8 +104,9 @@ const logFileRequest = () => {
 const publicUploadPath = path
   .join(__dirname, "uploads", "public")
   .replace(/\/+$/, ""); // replace trailing slash
-const uploadPath = path.join(__dirname, "uploads");
-const privateUploadPath = path.join(__dirname, "uploads", "private");
+const privateUploadPath = path
+  .join(__dirname, "uploads", "public")
+  .replace(/\/+$/, ""); // replace trailing slash
 
 // create separate multer instances for public and private uploads
 const publicUpload = multer({
@@ -121,8 +122,7 @@ const privateUpload = multer({
   storage: multer.diskStorage({
     destination: privateUploadPath,
     filename: (req, file, cb) => {
-      const ext = path.extname(file.originalname);
-      cb(null, `${uuidv4()}${ext}`);
+      cb(null, `${file.originalname}`);
     },
   }),
 });
@@ -179,8 +179,11 @@ app.post("/login", (req, res) => {
 
   authorize(username, password, (authorized) => {
     if (authorized) {
-      res.cookie("username", username);
-      res.cookie("password", password);
+      const oneYearInSeconds = 365 * 24 * 60 * 60; // One year in seconds
+
+      // Set cookies with a one-year expiration
+      res.cookie("username", username, { maxAge: oneYearInSeconds * 1000 });
+      res.cookie("password", password, { maxAge: oneYearInSeconds * 1000 });
       res.status(200).json({
         message: "Login successful",
         username: username,
@@ -277,7 +280,18 @@ app.get("/files/public/*", (req, res) => {
   }
 
   const ext = path.extname(filePath);
-  if ([".html", ".json", ".txt"].includes(ext)) {
+  if (
+    [
+      ".html",
+      ".json",
+      ".txt",
+      ".mov",
+      ".jpg",
+      ".png",
+      ".jpeg",
+      ".mp4",
+    ].includes(ext)
+  ) {
     // If file has .html, .json, or .txt extension, render it
     res.sendFile(filePath);
   } else {
@@ -292,7 +306,7 @@ app.get("/files/public/*", (req, res) => {
         } else {
           // decrement a download credit, etc.
         }
-      })
+      });
     } catch {
       res.status(500).send("Internal server error (File not found?)");
     }
@@ -435,9 +449,9 @@ app.post(
 
 // handle private uploads
 app.post(
-  "/api/upload/public",
+  "/api/upload/private",
   authorizeMiddleware, // add the authorization middleware here
-  publicUpload.single("filepond"),
+  privateUpload.single("filepond"),
   logRequest(),
   (req, res) => {
     res.json({ message: "File uploaded successfully." });
@@ -453,6 +467,8 @@ app.get("/", (req, res) => {
     }
 
     const fileData = [];
+    const directories = [];
+    const regularFiles = [];
 
     files.forEach((file) => {
       const filePath = path.join(publicUploadPath, file);
@@ -460,28 +476,41 @@ app.get("/", (req, res) => {
       const mimetype = mime.lookup(filePath);
       let fileSizeInBytes = stat.size;
       let folderName = path.basename(publicUploadPath);
-      //Check if file or folder and set boolean true if folder
       let isDirectoryFile = false;
       let filename = file;
+
       if (stat.isDirectory()) {
         fileSizeInBytes = "";
         folderName = folderName + "/";
-        isDirectoryFile = false;
+        isDirectoryFile = true;
         filename = file + "/";
+        directories.push({
+          filename: filename,
+          mimetype: mimetype || "unknown",
+          size: fileSizeInBytes,
+          folder: path.join("public"),
+          isDirectoryFile: isDirectoryFile,
+        });
+      } else {
+        regularFiles.push({
+          filename: filename,
+          mimetype: mimetype || "unknown",
+          size: fileSizeInBytes,
+          folder: path.join("public"),
+          isDirectoryFile: isDirectoryFile,
+        });
       }
-
-      const folder = path.join("public");
-      fileData.push({
-        filename: filename,
-        mimetype: mimetype || "unknown",
-        size: fileSizeInBytes,
-        folder: folder,
-        isDirectoryFile: isDirectoryFile,
-      });
     });
 
+    // Sort directories and regular files alphabetically
+    directories.sort((a, b) => a.filename.localeCompare(b.filename));
+    regularFiles.sort((a, b) => a.filename.localeCompare(b.filename));
+
+    // Combine directories and regular files
+    const sortedFiles = [...directories, ...regularFiles];
+
     res.render("files", {
-      files: fileData,
+      files: sortedFiles,
       formatFileSize,
     });
   });
@@ -532,4 +561,3 @@ app.get("/login", (req, res) => {
 const server = app.listen(3000, () => console.log("Server Online."));
 
 server.setTimeout(300000);
-

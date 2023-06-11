@@ -8,17 +8,6 @@
       type="image/png"
       href="https://cdn.discordapp.com/attachments/1061755202086125678/1085013775893143563/Boosteriod_Rounded.png"
     />
-    <script>
-      function formatFileSize(size) {
-        const units = ["B", "KB", "MB", "GB", "TB"];
-        let unitIndex = 0;
-        while (size >= 1024 && unitIndex < units.length - 1) {
-          size /= 1024;
-          unitIndex++;
-        }
-        return size.toFixed(2) + " " + units[unitIndex];
-      }
-    </script>
     <style type="text/css">
       body {
         background-color: #1e1e1e;
@@ -43,13 +32,6 @@
         text-align: center;
       }
 
-      .heading2 {
-        font-size: 16px;
-        font-weight: bold;
-        margin: 0 0 20px;
-        text-align: center;
-      }
-
       .files {
         list-style: none;
         margin: 0;
@@ -60,14 +42,37 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        border-bottom: 1px solid #666666;
-        padding: 10px 0;
+        border-radius: 10px;
+        padding: 10px;
+        border: 1px solid #666666;
+        margin-bottom: 10px;
+        background-color: #333333;
+        box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+        transition: transform 0.3s, box-shadow 0.3s;
+        overflow: hidden;
+        animation: slideIn 0.5s;
+        cursor: pointer;
+      }
+
+      @keyframes slideIn {
+        0% {
+          transform: translateX(-100%);
+        }
+        100% {
+          transform: translateX(0);
+        }
+      }
+
+      .file:hover {
+        transform: translateY(-2px);
+        box-shadow: 0px 8px 12px rgba(0, 0, 0, 0.2);
       }
 
       .file img {
-        max-width: 100%;
+        max-width: 50px;
         height: auto;
         margin-right: 10px;
+        border-radius: 50%;
       }
 
       .file-name {
@@ -76,12 +81,12 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        margin-right: 10px;
       }
 
       .file-size {
         font-size: 14px;
         font-weight: bold;
-        margin-left: 10px;
         color: #ffffff;
       }
 
@@ -103,12 +108,6 @@
         text-decoration: underline;
       }
 
-      a:hover {
-        color: #ffffff;
-        text-decoration: none;
-        /*make it bigger*/
-        font-size: 110%;
-      }
       /* Search bar */
       .search {
         display: flex;
@@ -128,14 +127,6 @@
         color: #ffffff;
         outline: none;
       }
-
-      .search button[type="submit"] {
-        display: none;
-      }
-
-      .search button[type="submit"] i {
-        display: none;
-      }
     </style>
   </head>
   <body>
@@ -143,51 +134,26 @@
       <a href="./files/upload/public">
         <h1 class="heading">Files</h1>
       </a>
-
+    
       <form class="search">
         <input type="text" name="q" placeholder="Search..." id="searchInput" />
-        <button type="submit"><i class="fa fa-search"></i></button>
       </form>
-
+    
       <ul class="files">
-        <% files.forEach(function(file) { %> <% if (file && file.mimetype &&
-        file.mimetype.includes('image')) { %>
-        <li class="file">
+        <% files.forEach(function(file) { %>
+        <% if (file && file.mimetype && file.mimetype.includes('image')) { %>
+        <li class="file" onclick="window.location.href='/files/<%= file.folder %>/<%= file.filename %>'">
           <div class="file-name">
-            <% if (!file.size) { %>
-            <a href="/files/<%= file.folder %>/<%= file.filename %>"
-              ><%= file.filename %></a
-            >
-            <% } else if (file.isDirectoryFile) { %>
-            <a href="/files/<%= file.folder %><%= file.filename %>"
-              ><%= file.filename %></a
-            >
-            <% } else { %>
-            <a href="/files/<%= file.folder %><%= file.filename %>"
-              ><%= file.filename %></a
-            >
-            <% }%>
+            <a href="/files/<%= file.folder %>/<%= file.filename %>"><%= file.filename %></a>
           </div>
           <% if (file.size) { %>
           <div class="file-size"><%= formatFileSize(file.size) %></div>
           <% } %>
         </li>
         <% } else { %>
-        <li class="file">
+        <li class="file" onclick="window.location.href='/files/<%= file.folder %>/<%= file.filename %>'">
           <div class="file-name">
-            <% if (!file.size) { %>
-            <a href="/files/<%= file.folder %>/<%= file.filename %>"
-              ><%= file.filename %></a
-            >
-            <% } else if (file.isDirectoryFile) { %>
-            <a href="/files/<%= file.folder %><%= file.filename %>"
-              ><%= file.filename %></a
-            >
-            <% } else { %>
-            <a href="/files/<%= file.folder %>/<%= file.filename %>"
-              ><%= file.filename %></a
-            >
-            <% } %>
+            <a href="/files/<%= file.folder %>/<%= file.filename %>"><%= file.filename %></a>
           </div>
           <% if (file.size) { %>
           <div class="file-size"><%= formatFileSize(file.size) %></div>
@@ -196,6 +162,7 @@
         <% } %> <% }); %>
       </ul>
     </div>
+    
 
     <script>
       const searchInput = document.getElementById("searchInput");
