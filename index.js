@@ -105,7 +105,7 @@ const publicUploadPath = path
   .join(__dirname, "uploads", "public")
   .replace(/\/+$/, ""); // replace trailing slash
 const privateUploadPath = path
-  .join(__dirname, "uploads", "public")
+  .join(__dirname, "uploads", "private")
   .replace(/\/+$/, ""); // replace trailing slash
 
 // create separate multer instances for public and private uploads
