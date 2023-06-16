@@ -590,7 +590,7 @@ app.get("/api/files/public/*", (req, res) => {
         mimetype: mimetype || "unknown",
         size: fileSizeInBytes,
         folder: folder,
-        downloadURL: `https://files.printedwaste.live/files/public/${req.params[0]}/${file}`,
+        downloadURL: `https://files.printedwaste.live/files/public/${req.params[0]}${file}`,
       });
     });
     // Sort directories and regular files alphabetically
