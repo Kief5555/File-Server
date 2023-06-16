@@ -553,6 +553,53 @@ app.get("/private", (req, res) => {
   });
 });
 
+//API for public files it will be returned like this: {"Files": [{"filename": "file1.txt", "downloadURL": "https://files.printedwaste.live/files/public/<folder (if any)/file.ext>", "size": 1234, "folder": "public"}]}
+app.get("/api/files/public/*", (req, res) => {
+  const filePath = path.resolve(publicUploadPath, req.params[0]);
+  // Check if requested path is a directory
+  if (!fs.existsSync(filePath)) {
+    res.status(404).json({ message: "File not found." });
+    return;
+  }
+  fs.readdir(filePath, (err, files) => {
+    if (err) {
+      console.error(err);
+      res.status(500).send("Internal server error");
+      return;
+    }
+
+    const fileData = [];
+
+    files.forEach((file) => {
+      const filePath = path.join(publicUploadPath, req.params[0], file);
+      const stat = fs.statSync(filePath);
+      const mimetype = mime.lookup(filePath);
+      let fileSizeInBytes = stat.size;
+      let folderName = path.basename(publicUploadPath);
+
+      if (stat.isDirectory()) {
+        fileSizeInBytes = "";
+        folderName = folderName;
+        isDirectoryFile = true;
+      }
+
+      //Remove the extra / at the end of the path
+      const folder = path.join("public", req.params[0]).replace(/\/$/, "");
+      fileData.push({
+        filename: file,
+        mimetype: mimetype || "unknown",
+        size: fileSizeInBytes,
+        folder: folder,
+        downloadURL: `https://files.printedwaste.live/files/public/${req.params[0]}/${file}`,
+      });
+    });
+    // Sort directories and regular files alphabetically
+    fileData.sort((a, b) => a.filename.localeCompare(b.filename));
+
+    res.json({ Files: fileData });
+  });
+});
+
 app.get("/login", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "login.html"));
 });
