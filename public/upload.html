@@ -1,11 +1,23 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PrintedWaste | File upload</title>
-    <meta content="" name="keywords" />
-    <meta content="PrintedWaste File Upload" name="description" />
+    <title>PrintedWaste</title>
+    <meta content="File server | Upload" name="description" />
+    <link
+      rel="icon"
+      type="image/png"
+      href="https://cdn.discordapp.com/attachments/1061755202086125678/1085013775893143563/Boosteriod_Rounded.png"
+    />
+    <link
+      href="https://unpkg.com/boxicons@2.0.7/css/boxicons.min.css"
+      rel="stylesheet"
+    />
+    <meta property="og:title" content="PrintedWaste" />
+    <meta property="og:description" content="File server | Upload" />
+    <meta
+      property="og:image"
+      content="https://cdn.discordapp.com/attachments/1061755202086125678/1085013775893143563/Boosteriod_Rounded.png"
+    />
     <link
       href="https://unpkg.com/filepond-plugin-image-preview/dist/filepond-plugin-image-preview.min.css"
       rel="stylesheet"
@@ -14,12 +26,159 @@
       href="https://unpkg.com/filepond/dist/filepond.min.css"
       rel="stylesheet"
     />
-    <link
-      rel="icon"
-      type="image/png"
-      href="https://cdn.discordapp.com/attachments/1061755202086125678/1085013775893143563/Boosteriod_Rounded.png"
-    />
+
     <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: "Poppins", sans-serif;
+      }
+      #submit-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 10px 20px;
+        font-size: 16px;
+        font-weight: bold;
+        color: #ffffff;
+        background-color: #2b2d2f;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        position: relative;
+        overflow: hidden;
+      }
+
+      #submit-button::before {
+        content: "";
+        position: absolute;
+        top: 50%;
+        right: 10px;
+        transform: translateY(-50%);
+        width: 0;
+        height: 0;
+        border-top: 6px solid transparent;
+        border-bottom: 6px solid transparent;
+        border-left: 6px solid #ffffff;
+        transition: transform 0.3s ease;
+      }
+
+      #submit-button:hover::before {
+        transform: translateY(-50%) translateX(2px);
+      }
+      #username-input,
+      #password-input {
+        display: block;
+        padding: 10px;
+        width: calc(100% - 2px); /* Adjusted width calculation */
+        border: 1px solid #ffffff;
+        border-radius: 5px;
+        margin-bottom: 20px;
+        font-size: 16px;
+        font-weight: normal;
+        color: #ffffff;
+        background-color: #555555;
+      }
+
+      /* log out button and cancel button */
+      #logout-button,
+      #cancel-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 10px 20px;
+        margin: 10px;
+        /* border white */
+        border: 1px solid #ffffff;
+        font-size: 16px;
+        font-weight: bold;
+        color: #ffffff;
+        background-color: #5b37ff;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        position: relative;
+        overflow: hidden;
+      }
+
+      input:disabled {
+        background-color: #2f2f2f;
+        color: #6d6d6d;
+        cursor: not-allowed;
+      }
+      .sidebar .profile #login-button {
+        position: absolute;
+        top: 50%;
+        right: 0;
+        transform: translateY(-50%);
+        background: #1d1b31;
+        width: 100%;
+        height: 60px;
+        line-height: 60px;
+        border-radius: 0px;
+        transition: all 0.5s ease;
+        cursor: pointer;
+      }
+      .sidebar.open .profile #login-button {
+        width: 50px;
+        background: none;
+      }
+      .popup {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+        border-radius: 10px;
+      }
+
+      .popup-content {
+        background-color: #333;
+        padding: 20px;
+        border-radius: 10px;
+        max-width: 90%;
+        text-align: center;
+        border-radius: 10px;
+        border: 1px solid rgb(255, 255, 255);
+      }
+
+      .popup h3 {
+        margin-top: 0;
+        color: #fff;
+      }
+
+      .popup p {
+        color: #ccc;
+      }
+
+      .popup-close {
+        margin-top: 20px;
+        background-color: #007bff;
+        color: #fff;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 5px;
+        cursor: pointer;
+      }
+
+      .popup-close:hover {
+        background-color: #0056b3;
+      }
+
+      .popup.active {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
       body {
         background-color: #202124;
         color: #f2f2f2;
@@ -33,6 +192,12 @@
       .filepond--drop-label {
         color: #f2f2f2;
         font-size: 18px;
+      }
+      #loginstatus {
+        cursor: pointer;
+      }
+      #loginstatus:hover {
+        color: white;
       }
 
       .filepond--root {
@@ -1526,7 +1691,7 @@
             styleProgressIndicatorPosition: ["right", ge.STRING],
             styleButtonRemoveItemAlign: [!1, ge.BOOLEAN],
             files: [[], ge.ARRAY],
-            credits: [["/login", "Login/Logout"], ge.ARRAY],
+            credits: [["/", "Login/Logout"], ge.ARRAY],
           },
           Le = function (e, t) {
             return M(t)
@@ -6337,13 +6502,11 @@
                 (u.className = "filepond--credits"),
                   u.setAttribute("aria-hidden", "true"),
                   u.setAttribute("id", "loginstatus"),
-                  (u.href = s[0]),
                   (u.tabindex = -1),
                   (u.target = "_self"),
                   (u.rel = "noopener noreferrer"),
                   (u.textContent = s[1]),
-                  t.element.appendChild(u),
-                  (t.ref.credits = u);
+                  t.element.appendChild(u);
               }
             },
             write: function (e) {
@@ -7306,31 +7469,250 @@
           Object.defineProperty(e, "__esModule", { value: !0 });
       });
       window.addEventListener("load", function () {
+        var popup = document.getElementById("popup");
+        var popupClose = document.getElementById("popup-close");
+
+        function showPopup(title, message) {
+          const popupTitle = document.getElementById("popup-text");
+          const popupMessage = document.getElementById("popup-info");
+
+          popupTitle.textContent = title;
+          popupMessage.textContent = message;
+          popup.classList.add("active");
+        }
+
+        function hidePopup() {
+          popup.classList.remove("active");
+          setTimeout(() => {
+            window.location.reload()
+          }, 300);
+        }
+
+        function getCookie(name) {
+          var cookieValue = null;
+          if (document.cookie && document.cookie !== "") {
+            var cookies = document.cookie.split(";");
+            for (var i = 0; i < cookies.length; i++) {
+              var cookie = cookies[i].trim();
+              if (cookie.substring(0, name.length + 1) === name + "=") {
+                cookieValue = decodeURIComponent(
+                  cookie.substring(name.length + 1)
+                );
+                break;
+              }
+            }
+          }
+          return cookieValue;
+        }
+
+        popupClose.addEventListener("click", hidePopup);
+
+        //check for query upload path (?path=)
+        const urlParams = new URLSearchParams(window.location.search);
+        const path = urlParams.get("path");
+
+        setTimeout(() => {
+          if(!path) return alert("No path specified\n\nUploading to public");
+        }, 1000);
+
         const loginstatus = document.getElementById("loginstatus");
         //Check cookies for username
-        if (document.cookie.indexOf("username") >= 0) {
+        if (document.cookie.includes("loggedIn=true")) {
+          //logged in as and if theres a path put (uploading to) in back of it
           loginstatus.innerHTML = `Logged in as ${
             document.cookie
               .split(";")
               .find((item) => item.includes("username"))
               .split("=")[1]
-          }`;
+          } (${path ? "uploading to /" + path : ""})`;
         } else {
           loginstatus.innerHTML = "Login";
+          document.cookie = "loggedIn=false; path=/";
         }
+        loginstatus.addEventListener("click", function () {
+          if (document.cookie.includes("loggedIn=true")) {
+            showPopup("Log Out", "Are you sure you want to log out?");
+            const popupMessage = document.getElementById("popup-info");
+
+            const popupForm = document.createElement("form");
+            popupForm.className = "popup-form";
+            popupForm.id = "popup-form";
+
+            const submitButton = document.createElement("button");
+            submitButton.type = "submit";
+            submitButton.textContent = "Log Out";
+            submitButton.className = "popup-button";
+            submitButton.id = "logout-button";
+
+            const cancelButton = document.createElement("button");
+            cancelButton.type = "button";
+            cancelButton.textContent = "Cancel";
+            cancelButton.className = "popup-button";
+            cancelButton.id = "cancel-button";
+
+            popupForm.appendChild(submitButton);
+            popupForm.appendChild(cancelButton);
+            popupMessage.appendChild(popupForm);
+
+            //if cancel button is pressed, close popup
+            cancelButton.addEventListener("click", () => {
+              hidePopup();
+            });
+
+            //Hide close button
+            const closeButton = document.getElementById("popup-close");
+            closeButton.style.display = "none";
+
+            //if log out button is pressed, log out
+            submitButton.addEventListener("click", () => {
+              document.cookie = "loggedIn=false; path=/";
+              document.cookie = "username=; path=/";
+              document.cookie = "password=; path=/";
+              window.location.reload();
+            });
+          } else {
+            //Show popup and an element for username and password and button to submit
+            showPopup("Login", "Please enter your username and password");
+            const popupTitle = document.getElementById("popup-text");
+            const popupMessage = document.getElementById("popup-info");
+
+            const popupForm = document.createElement("form");
+            popupForm.className = "popup-form";
+            popupForm.id = "popup-form";
+
+            const usernameInput = document.createElement("input");
+            usernameInput.type = "text";
+            usernameInput.placeholder = "Username";
+            usernameInput.id = "username-input";
+            usernameInput.className = "popup-input";
+
+            const passwordInput = document.createElement("input");
+            passwordInput.type = "password";
+            passwordInput.placeholder = "Password";
+            passwordInput.id = "password-input";
+            passwordInput.className = "popup-input";
+
+            const submitButton = document.createElement("button");
+            submitButton.type = "submit";
+            submitButton.textContent = "Submit";
+            submitButton.id = "submit-button";
+            submitButton.className = "popup-submit";
+
+            popupForm.appendChild(usernameInput);
+            popupForm.appendChild(passwordInput);
+            popupForm.appendChild(submitButton);
+            popupMessage.appendChild(popupForm);
+
+            //Make the close button dissppear but dont remove it
+            const closeButton = document.getElementById("popup-close");
+            closeButton.style.display = "none";
+
+            //Submit button
+            submitButton.addEventListener("click", () => {
+              //change it to the bx-loader and remove the arrow and disable it
+              submitButton.innerHTML =
+                '<i class="bx bx-loader-alt bx-spin"></i>';
+              submitButton.disabled = true;
+
+              //Get username and password
+              const username = document.getElementById("username-input").value;
+              const password = document.getElementById("password-input").value;
+
+              //Send it to the api as xhr and set cookies to never exipre. Cookies is just username and password
+              const xhr = new XMLHttpRequest();
+              xhr.open(
+                "POST",
+                "https://api.printedwaste.live/auth/login",
+                true
+              );
+              xhr.setRequestHeader("Content-Type", "application/json");
+              xhr.send(
+                JSON.stringify({
+                  username: username,
+                  password: password,
+                })
+              );
+              xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4) {
+                  if (xhr.status === 200) {
+                    //Set the cookies
+                    document.cookie =
+                      "username=" + username + ";max-age=31536000";
+                    document.cookie =
+                      "password=" + password + ";max-age=31536000";
+
+                    //set loggedIn cookie
+                    document.cookie = "loggedIn=true;max-age=31536000";
+
+                    //Close the popup
+                    hidePopup();
+
+                    //Show the dashboard
+                    showPopup("Success", "You have logged in successfully");
+                    //reshow the close button and destory what we made
+                    closeButton.style.display = "";
+
+                    //reload the page when popup is closed
+                    closeButton.addEventListener("click", () => {
+                      window.location.reload();
+                    });
+                  } else {
+                    //Show error
+                    popupTitle.textContent = "Error";
+                    popupMessage.textContent = "Incorrect username or password";
+                    submitButton.innerHTML = "Submit";
+                    submitButton.disabled = false;
+
+                    //remove the popup close display stylying but dont set it to none, remove the display styling
+                    closeButton.style.display = "";
+                  }
+                }
+              };
+            });
+          }
+        });
       });
     </script>
+    <div id="popup" class="popup">
+      <div class="popup-content">
+        <h3 id="popup-text">Waiting</h3>
+        <p id="popup-info">Waiting for content</p>
+        <button id="popup-close" class="popup-close">Close</button>
+      </div>
+    </div>
     <script>
+      function getCookie(name) {
+        var cookieValue = null;
+        if (document.cookie && document.cookie !== "") {
+          var cookies = document.cookie.split(";");
+          for (var i = 0; i < cookies.length; i++) {
+            var cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === name + "=") {
+              cookieValue = decodeURIComponent(
+                cookie.substring(name.length + 1)
+              );
+              break;
+            }
+          }
+        }
+        return cookieValue;
+      }
+      //get ?path= from url
+      const urlParams = new URLSearchParams(window.location.search);
+      const path = urlParams.get("path");
+
       const inputElement = document.querySelector(".filepond");
       FilePond.registerPlugin(FilePondPluginImagePreview);
       FilePond.setOptions({
         server: {
-          url: "/api/upload/public",
+          url: "/api/upload/",
           process: {
             method: "POST",
             headers: {
               "X-Requested-With": "XMLHttpRequest",
-              Cookie: document.cookie,
+              username: getCookie("username"),
+              password: getCookie("password"),
+              path: path,
             },
             withCredentials: true,
           },
@@ -7341,6 +7723,12 @@
         dropOnElement: true,
         labelFileProcessingError: "Access is denied",
         labelFileProcessingComplete: "Successfully uploaded",
+        labelIdle:
+          "Drag & Drop your files or <span class='filepond--label-action'>Browse</span>",
+        labelFileProcessing: "Uploading",
+        labelTapToCancel: "Tap to cancel",
+        labelTapToRetry: "Tap to retry",
+        labelTapToUndo: "",
       });
 
       const pond = FilePond.create(inputElement);

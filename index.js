@@ -1,610 +1,181 @@
 /******************************************************
- * Name: File Server
- * Author: Kiefer
- * Created: 4/37/2023 (MM/DD/YYYY)
- *****************************************************/
+ * Author:    Kiefer
+ * Date:      2023-4-12 (MM-DD-YYYY)
+ * Description: API Server
+ * Version:   1.0.0
+ * License:   MIT
+ ******************************************************/
 
 console.clear();
 const express = require("express");
-const multer = require("multer");
+const fs = require("fs");
 const path = require("path");
-const app = express();
-const cors = require("cors"); //CORS Policy
-const fs = require("fs"); // File System
-const winston = require("winston"); // Winston Logger
-const chalk = require("chalk"); // Chalk for console colors. Non esm module, so no import. The verion for non esm chalk is 2.4.2
-const mime = require("mime-types"); // Mime Types
-const sqlite3 = require("sqlite3").verbose();
+const cors = require("cors");
+const winston = require("winston");
+const chalk = require("chalk");
 const bodyParser = require("body-parser");
-const cookieParser = require("cookie-parser");
+const Table = require("cli-table3");
+const sqlite3 = require("sqlite3").verbose();
 require("dotenv").config();
 
-app.set("server.timeout", 300000);
-app.set("view engine", "ejs");
-app.use(cors()); //CORS Policy
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(cookieParser());
-
-const timezoned = () => {
-  return new Date().toLocaleString("en-US", {
-    timeZone: "America/Los_Angeles",
-  });
+const createDatabaseConnection = (dbFile) => {
+  const db = new sqlite3.Database(path.join(__dirname, "database", dbFile));
+  return db;
 };
 
+const app = express();
+const port = 3000;
+
+// Configure Winston logger
 const logger = winston.createLogger({
+  level: "info",
+  format: winston.format.combine(
+    winston.format.colorize(),
+    winston.format.timestamp({ format: "YYYY-MM-DD hh:mm:ss A" }),
+    winston.format.printf(({ timestamp, level, message, meta }) => {
+      const formattedTimestamp = chalk.cyanBright(`[${timestamp}]`).padEnd(25);
+      const formattedLevel =
+        level === "info" ? chalk.green(level) : chalk.red(level);
+      const formattedMeta = meta ? chalk.gray(`[${meta}]`) : "";
+      return `${formattedTimestamp} [${formattedLevel}] ${formattedMeta} ${message}`;
+    })
+  ),
+  defaultMeta: { service: "api-server" },
   transports: [
-    new winston.transports.File({
-      filename: "logs.log",
-      level: "info",
-      format: winston.format.combine(
-        winston.format.timestamp({
-          format: "MM/DD | h:mm A",
-          // pass timezoned function here
-          transform: timezoned,
-        }),
-        winston.format.printf((info) => {
-          return `[${info.timestamp}] - ${info.message}`;
-        })
-      ),
-    }),
+    new winston.transports.Console(),
+    new winston.transports.File({ filename: "error.log", level: "error" }),
+    new winston.transports.File({ filename: "combined.log" }),
   ],
 });
 
-const logRequest = () => {
-  return (req, res, next) => {
-    const method = req.method;
-    const url = req.originalUrl;
-    const start = new Date();
-    res.on("finish", () => {
-      const end = new Date();
-      const status = res.statusCode;
-      const responseTime = end - start;
-      const formattedDate = chalk.blueBright(
-        `${start.toLocaleDateString()} | ${start.toLocaleTimeString()}`
-      );
-      const formattedMethod = chalk.yellow(method);
-      const formattedUrl = chalk.white(url);
-      const formattedStatus =
-        status >= 400 ? chalk.red(status) : chalk.green(status);
-      const formattedResponseTime = chalk.white(`${responseTime}ms`);
-      const logMessage = `${formattedDate} - ${formattedMethod} ${formattedUrl} ${formattedStatus} ${formattedResponseTime}`;
-      logger.info(`${method} ${url} ${status} ${responseTime}ms`);
-      console.log(logMessage);
-    });
-    next();
-  };
-};
-
-function formatFileSize(size) {
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let unitIndex = 0;
-  while (size >= 1024 && unitIndex < units.length - 1) {
-    size /= 1024;
-    unitIndex++;
-  }
-  return size.toFixed(2) + " " + units[unitIndex];
-}
-
-const logFileRequest = () => {
-  return (req, res, next) => {
-    const method = req.method;
-    const url = req.originalUrl;
-    const start = new Date();
-    res.on("finish", () => {
-      const end = new Date();
-      const status = res.statusCode;
-      const responseTime = end - start;
-      logger.info(`${method} ${url} ${status} ${responseTime}ms`);
-    });
-    next();
-  };
-};
-
-// set up public and private upload directories
-const publicUploadPath = path
-  .join(__dirname, "uploads", "public")
-  .replace(/\/+$/, ""); // replace trailing slash
-const privateUploadPath = path
-  .join(__dirname, "uploads", "private")
-  .replace(/\/+$/, ""); // replace trailing slash
-
-// create separate multer instances for public and private uploads
-const publicUpload = multer({
-  storage: multer.diskStorage({
-    destination: publicUploadPath,
-    filename: (req, file, cb) => {
-      cb(null, `${file.originalname}`);
-    },
-  }),
-});
-
-const privateUpload = multer({
-  storage: multer.diskStorage({
-    destination: privateUploadPath,
-    filename: (req, file, cb) => {
-      cb(null, `${file.originalname}`);
-    },
-  }),
-});
-
-const dbPath = path.join(__dirname, "users.db");
-const db = new sqlite3.Database(dbPath);
-
-// Create the users table in the file-based SQLite database
-db.run("CREATE TABLE IF NOT EXISTS users (username TEXT, password TEXT)");
-
-// Insert some test data into the users table
-
-// Configure middleware for parsing request bodies and cookies
+// Middleware
+app.use(cors());
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(cookieParser());
+app.use(bodyParser.json());
+app.use("/favicon.ico", express.static("public/favicon.ico"));
+app.set('views', path.join(__dirname, 'public'));
+app.set("view engine", "ejs");
 
-// Define the authorize function
-function authorize(username, password, callback) {
-  db.get(
-    `SELECT * FROM users WHERE username = ? AND password = ?`,
-    [username, password],
-    (err, row) => {
-      if (err) {
-        callback(false);
-      } else {
-        if (row) {
-          callback(true);
-        } else {
-          callback(false);
+
+const loadRoutesFromDirectory = (directoryPath, table, routePrefix = "") => {
+  const routeFiles = fs.readdirSync(directoryPath, { withFileTypes: true });
+  routeFiles.forEach((dirent) => {
+    const file = dirent.name; // Extract the file name from the Dirent object
+    const routePath = path.join(directoryPath, file);
+    const routeStats = fs.statSync(routePath);
+
+    if (routeStats.isDirectory()) {
+      const subdirectoryPath = path.join(routePrefix.toString(), file);
+      loadRoutesFromDirectory(routePath, table, subdirectoryPath);
+    } else if (routeStats.isFile()) {
+      const routeModule = require(routePath);
+
+      if (
+        routeModule.Name &&
+        routeModule.Route &&
+        routeModule.Method &&
+        routeModule.handle
+      ) {
+        const { Name, Route, Method, handle } = routeModule;
+
+        // Apply custom middlewares to each route
+        if (routeModule.Log) {
+          if (routeModule.Log === "File") {
+            if (routeModule.Log === "File") {
+              app.use(`${Route}`, (req, res, next) => {
+                const method = req.method;
+                const url = req.originalUrl;
+                const start = new Date();
+                res.on("finish", () => {
+                  const end = new Date();
+                  const status = res.statusCode;
+                  const responseTime = end - start;
+                  logger.info(`${method} ${url} ${status} ${responseTime}ms`);
+                });
+                next();
+              });
+            }
+          } else if (routeModule.Log === "Console") {
+            app.use(`${Route}`, (req, res, next) => {
+              const method = req.method;
+              const url = req.originalUrl;
+              const start = new Date();
+              res.on("finish", () => {
+                const end = new Date();
+                const status = res.statusCode;
+                const responseTime = end - start;
+                logger.info(`${method} ${url} ${status} ${responseTime}ms`);
+              });
+              next();
+            });
+          }
         }
+
+        app[Method.toLowerCase()](`${Route}`, async (req, res, next) => {
+          const dbFile = routeModule.Sqlite;
+          const db = dbFile ? createDatabaseConnection(dbFile) : null;
+
+          try {
+            const result = await handle.bind(routeModule)(req, res, db);
+            if (result) {
+              try {
+                res.send(result);
+              } catch (error) {}
+            }
+          } catch (error) {
+            next(error);
+          } finally {
+            if (db) {
+              db.close((err) => {
+                if (err) {
+                  console.error(
+                    "Error closing database connection:",
+                    err.message
+                  );
+                }
+              });
+            }
+          }
+        });
+        table.push([Name, Method, `${Route}`, chalk.green("✓")]);
+      } else {
+        logger.error(`Invalid route module: ${file}`);
+        table.push([file, "", "", chalk.red("✗")]);
       }
     }
-  );
+  });
+};
+
+// Dynamically load routes from the directory
+const routesDirectoryPath = path.join(__dirname, "routes");
+
+const table = new Table({
+  head: ["Name", "Method", "Route", "Status"],
+  colAligns: ["left", "center", "center", "center"],
+  style: { head: ["cyan"] },
+});
+
+loadRoutesFromDirectory(routesDirectoryPath, table, logger);
+
+logger.info("Routes Loaded");
+if (table.length > 0) {
+  console.log(table.toString());
+} else {
+  logger.info("No routes loaded.");
 }
 
-function authorizeMiddleware(req, res, next) {
-  const username = req.cookies.username;
-  const password = req.cookies.password;
-
-  authorize(username, password, (authorized) => {
-    if (authorized) {
-      next();
-    } else {
-      // User is not authorized
-      res.status(401).json({ message: "Unauthorized." });
-    }
-  });
-}
-
-// Define the login endpoint
-app.post("/login", (req, res) => {
-  const username = req.body.username;
-  const password = req.body.password;
-
-  authorize(username, password, (authorized) => {
-    if (authorized) {
-      const oneYearInSeconds = 365 * 24 * 60 * 60; // One year in seconds
-
-      // Set cookies with a one-year expiration
-      res.cookie("username", username, { maxAge: oneYearInSeconds * 1000 });
-      res.cookie("password", password, { maxAge: oneYearInSeconds * 1000 });
-      res.status(200).json({
-        message: "Login successful",
-        username: username,
-        password: password,
-      });
-    } else {
-      res.status(401).json({ message: "Login failed" });
-    }
-  });
+// 404 handler
+app.use(function (req, res, next) {
+  res.status(404).sendFile(__dirname + "/public/404.html");
 });
 
-// Define the signup endpoint
-app.post("/signup", (req, res) => {
-  res.status(403).json({ message: "Signup is not available" });
-  return;
-  const username = req.body.username;
-  const password = req.body.password;
-
-  db.run(
-    "INSERT INTO users (username, password) VALUES (?, ?)",
-    [username, password],
-    (err) => {
-      if (err) {
-        res.status(500).json({ message: "User already exists" });
-      } else {
-        res.cookie("username", username);
-        res.cookie("password", password);
-        res.status(200).json({ message: "User created" });
-      }
-    }
-  );
+// Error handling middleware
+app.use((err, req, res, next) => {
+  logger.error(err.stack, { route: req.path });
+  res.status(500).json({ error: "Something broke!" });
 });
 
-app.get("/files/upload/public", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "upload.html"));
+// Start the server
+app.listen(port, () => {
+  logger.info(`Server is listening on port ${port}`);
 });
-
-app.get("/files/public/*", (req, res) => {
-  const filePath = path.resolve(publicUploadPath, req.params[0]);
-  // Check if requested path is a directory
-  if (!fs.existsSync(filePath)) {
-    res.status(404).send("File not found.");
-    return;
-  }
-  const stats = fs.statSync(filePath);
-  if (stats.isDirectory()) {
-    fs.readdir(filePath, (err, files) => {
-      if (err) {
-        console.error(err);
-        res.status(500).send("Internal server error");
-        return;
-      }
-
-      const fileData = [];
-
-      files.forEach((file) => {
-        const filePath = path.join(publicUploadPath, req.params[0], file);
-        const stat = fs.statSync(filePath);
-        const mimetype = mime.lookup(filePath);
-        let fileSizeInBytes = stat.size;
-        let folderName = path.basename(publicUploadPath);
-        //Check if file or folder and set boolean true if folder
-        let isDirectoryFile = false;
-
-        if (stat.isDirectory()) {
-          fileSizeInBytes = "";
-          folderName = folderName;
-          isDirectoryFile = true;
-        }
-
-        //Remove the extra / at the end of the path
-        const folder = path.join("public", req.params[0]).replace(/\/+$/, "");
-        fileData.push({
-          filename: file,
-          mimetype: mimetype || "unknown",
-          size: fileSizeInBytes,
-          folder: folder,
-          isDirectoryFile: isDirectoryFile,
-        });
-      });
-
-      res.render("files", {
-        files: fileData,
-        formatFileSize,
-      });
-    });
-    return;
-  }
-
-  // If requested path is not a directory, serve the file
-  if (!fs.existsSync(filePath)) {
-    res.status(404).send("File not found.");
-    return;
-  }
-
-  const ext = path.extname(filePath);
-  if (
-    [
-      ".html",
-      ".json",
-      ".txt",
-      ".mov",
-      ".jpg",
-      ".png",
-      ".jpeg",
-      ".mp4",
-    ].includes(ext)
-  ) {
-    // If file has .html, .json, or .txt extension, render it
-    res.sendFile(filePath);
-  } else {
-    try {
-      const filename = path.basename(filePath);
-
-      res.download(filePath, (err) => {
-        if (err) {
-          // Handle error, but keep in mind the response may be partially-sent
-          // so check res.headersSent
-          console.error(err);
-        } else {
-          // decrement a download credit, etc.
-        }
-      });
-    } catch {
-      res.status(500).send("Internal server error (File not found?)");
-    }
-  }
-});
-
-app.get("/files/private/*", (req, res) => {
-  const filePath = path.join(privateUploadPath, req.params[0]);
-
-  // Check if requested path is a directory
-  const stats = fs.statSync(filePath);
-  if (stats.isDirectory()) {
-    fs.readdir(filePath, (err, files) => {
-      if (err) {
-        console.error(err);
-        res.status(500).send("Internal server error");
-        return;
-      }
-
-      const fileData = [];
-
-      files.forEach((file) => {
-        const filePath = path.join(privateUploadPath, req.params[0], file);
-        const stat = fs.statSync(filePath);
-        const mimetype = mime.lookup(filePath);
-        let fileSizeInBytes = stat.size;
-        let folderName = path.basename(privateUploadPath);
-
-        if (stat.isDirectory()) {
-          fileSizeInBytes = "";
-          folderName = folderName + "/";
-        }
-
-        fileData.push({
-          filename: file,
-          mimetype: mimetype || "unknown",
-          size: fileSizeInBytes,
-          folder: "private/" + req.params[0],
-        });
-      });
-
-      res.render("files", {
-        files: fileData,
-        formatFileSize,
-      });
-    });
-    return;
-  }
-  const { username, password } = req.cookies;
-  const passwordAuth = req.query.password;
-  authorize(username, password, async (authorized) => {
-    if (passwordAuth !== process.env.privatepasswd && authorized == false) {
-      res.status(401).json({ message: "Unauthorized." });
-    } else {
-      // If requested path is not a directory, serve the file
-
-      if (!fs.existsSync(filePath)) {
-        res.status(404).send("File not found.");
-        return;
-      }
-
-      const ext = path.extname(filePath);
-      if ([".html", ".json", ".txt"].includes(ext)) {
-        // If file has .html, .json, or .txt extension, render it
-        res.sendFile(filePath);
-      } else {
-        // Otherwise, download the file
-        const filename = path.basename(filePath);
-        // Set the appropriate headers
-        res.setHeader("Content-Type", "application/octet-stream");
-        res.setHeader(
-          "Content-Disposition",
-          `attachment; filename=${filename}`
-        );
-
-        // Create a read stream and pipe it to the response object
-        const fileStream = fs.createReadStream(filePath);
-        fileStream.pipe(res);
-      }
-    }
-  });
-});
-
-//Cert util support
-app.post("/files/private/*", (req, res) => {
-  const filePath = path.join(privateUploadPath, req.params[0]);
-
-  // Check if requested path is a directory
-  const stats = fs.statSync(filePath);
-  if (stats.isDirectory()) {
-    fs.readdir(filePath, (err, files) => {
-      if (err) {
-        console.error(err);
-        res.status(500).send("Internal server error");
-        return;
-      }
-      res.status(401).json({ message: "Unauthorized." });
-    });
-    return;
-  }
-
-  // If requested path is not a directory, serve the file
-
-  if (!fs.existsSync(filePath)) {
-    res.status(404).send("File not found.");
-    return;
-  }
-  //res.status(401).json({ message: "Unauthorized." });
-
-  const ext = path.extname(filePath);
-  if ([".html", ".json", ".txt"].includes(ext)) {
-    // If file has .html, .json, or .txt extension, render it
-    res.sendFile(filePath);
-  } else {
-    // Otherwise, download the file
-    const filename = path.basename(filePath);
-    // Set the appropriate headers
-    res.setHeader("Content-Type", "application/octet-stream");
-    res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
-
-    // Create a read stream and pipe it to the response object
-    const fileStream = fs.createReadStream(filePath);
-    fileStream.pipe(res);
-  }
-});
-
-// serve static files from public directory
-app.use(express.static(publicUploadPath));
-
-// handle public uploads
-app.post(
-  "/api/upload/public",
-  authorizeMiddleware, // add the authorization middleware here
-  publicUpload.single("filepond"),
-  logRequest(),
-  (req, res) => {
-    res.json({ message: "File uploaded successfully." });
-  }
-);
-
-// handle private uploads
-app.post(
-  "/api/upload/private",
-  authorizeMiddleware, // add the authorization middleware here
-  privateUpload.single("filepond"),
-  logRequest(),
-  (req, res) => {
-    res.json({ message: "File uploaded successfully." });
-  }
-);
-
-app.get("/", (req, res) => {
-  fs.readdir(publicUploadPath, (err, files) => {
-    if (err) {
-      console.error(err);
-      res.status(500).send("Internal server error");
-      return;
-    }
-
-    const fileData = [];
-    const directories = [];
-    const regularFiles = [];
-
-    files.forEach((file) => {
-      const filePath = path.join(publicUploadPath, file);
-      const stat = fs.statSync(filePath);
-      const mimetype = mime.lookup(filePath);
-      let fileSizeInBytes = stat.size;
-      let folderName = path.basename(publicUploadPath);
-      let isDirectoryFile = false;
-      let filename = file;
-
-      if (stat.isDirectory()) {
-        fileSizeInBytes = "";
-        folderName = folderName + "/";
-        isDirectoryFile = true;
-        filename = file + "/";
-        directories.push({
-          filename: filename,
-          mimetype: mimetype || "unknown",
-          size: fileSizeInBytes,
-          folder: path.join("public"),
-          isDirectoryFile: isDirectoryFile,
-        });
-      } else {
-        regularFiles.push({
-          filename: filename,
-          mimetype: mimetype || "unknown",
-          size: fileSizeInBytes,
-          folder: path.join("public"),
-          isDirectoryFile: isDirectoryFile,
-        });
-      }
-    });
-
-    // Sort directories and regular files alphabetically
-    directories.sort((a, b) => a.filename.localeCompare(b.filename));
-    regularFiles.sort((a, b) => a.filename.localeCompare(b.filename));
-
-    // Combine directories and regular files
-    const sortedFiles = [...directories, ...regularFiles];
-
-    res.render("files", {
-      files: sortedFiles,
-      formatFileSize,
-    });
-  });
-});
-
-app.get("/private", (req, res) => {
-  fs.readdir(privateUploadPath, (err, files) => {
-    if (err) {
-      console.error(err);
-      res.status(500).send("Internal server error");
-      return;
-    }
-
-    const fileData = [];
-
-    files.forEach((file) => {
-      const filePath = path.join(privateUploadPath, file);
-      const stat = fs.statSync(filePath);
-      const mimetype = mime.lookup(filePath);
-      let fileSizeInBytes = stat.size;
-      let folderName = path.basename(privateUploadPath);
-
-      if (stat.isDirectory()) {
-        fileSizeInBytes = "";
-        file = file + "/";
-      }
-
-      fileData.push({
-        filename: file,
-        mimetype: mimetype || "unknown",
-        size: fileSizeInBytes,
-        folder: folderName,
-      });
-    });
-
-    res.render("files", {
-      files: fileData,
-      formatFileSize,
-    });
-  });
-});
-
-//API for public files it will be returned like this: {"Files": [{"filename": "file1.txt", "downloadURL": "https://files.printedwaste.live/files/public/<folder (if any)/file.ext>", "size": 1234, "folder": "public"}]}
-app.get("/api/files/public/*", (req, res) => {
-  const filePath = path.resolve(publicUploadPath, req.params[0]);
-  // Check if requested path is a directory
-  if (!fs.existsSync(filePath)) {
-    res.status(404).json({ message: "File not found." });
-    return;
-  }
-  fs.readdir(filePath, (err, files) => {
-    if (err) {
-      console.error(err);
-      res.status(500).send("Internal server error");
-      return;
-    }
-
-    const fileData = [];
-
-    files.forEach((file) => {
-      const filePath = path.join(publicUploadPath, req.params[0], file);
-      const stat = fs.statSync(filePath);
-      const mimetype = mime.lookup(filePath);
-      let fileSizeInBytes = stat.size;
-      let folderName = path.basename(publicUploadPath);
-
-      if (stat.isDirectory()) {
-        fileSizeInBytes = "";
-        folderName = folderName;
-        isDirectoryFile = true;
-      }
-
-      //Remove the extra / at the end of the path
-      const folder = path.join("public", req.params[0]).replace(/\/$/, "");
-      fileData.push({
-        filename: file,
-        mimetype: mimetype || "unknown",
-        size: fileSizeInBytes,
-        folder: folder,
-        downloadURL: `https://files.printedwaste.live/files/public/${req.params[0]}${file}`,
-      });
-    });
-    // Sort directories and regular files alphabetically
-    fileData.sort((a, b) => a.filename.localeCompare(b.filename));
-
-    res.json({ Files: fileData });
-  });
-});
-
-app.get("/login", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "login.html"));
-});
-
-// start server
-const server = app.listen(3000, () => console.log("Server Online."));
-
-server.setTimeout(300000);

@@ -1,12 +1,19 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Files</title>
-    <meta content="PrintedWaste Files" name="description" />
+    <meta charset="UTF-8" />
+    <title>PrintedWaste</title>
+    <meta content="File server" name="description" />
     <link
       rel="icon"
       type="image/png"
       href="https://cdn.discordapp.com/attachments/1061755202086125678/1085013775893143563/Boosteriod_Rounded.png"
+    />
+    <meta property="og:title" content="PrintedWaste" />
+    <meta property="og:description" content="File server" />
+    <meta
+      property="og:image"
+      content="https://cdn.discordapp.com/attachments/1061755202086125678/1085013775893143563/Boosteriod_Rounded.png"
     />
     <style type="text/css">
       body {
@@ -65,7 +72,9 @@
 
       .file:hover {
         transform: translateY(-2px);
-        box-shadow: 0px 8px 12px rgba(0, 0, 0, 0.2);
+        box-shadow: 0px 12px 16px rgba(0, 0, 0, 0.2);
+        /* slightly dim the color*/
+        background-color: #2a2a2a;
       }
 
       .file img {
@@ -131,29 +140,39 @@
   </head>
   <body>
     <div class="container">
-      <a href="./files/upload/public">
+      <a href="/upload?path=<%= currentDirectory %>">
         <h1 class="heading">Files</h1>
       </a>
-    
+
       <form class="search">
         <input type="text" name="q" placeholder="Search..." id="searchInput" />
       </form>
-    
+
       <ul class="files">
-        <% files.forEach(function(file) { %>
-        <% if (file && file.mimetype && file.mimetype.includes('image')) { %>
-        <li class="file" onclick="window.location.href='/files/<%= file.folder %>/<%= file.filename %>'">
+        <% files.forEach(function(file) { %> <% if (file && file.mimetype &&
+        file.mimetype.includes('image')) { %>
+        <li
+          class="file"
+          onclick="window.location.href='/files/<%= file.folder %>/<%= file.filename %>'"
+        >
           <div class="file-name">
-            <a href="/files/<%= file.folder %>/<%= file.filename %>"><%= file.filename %></a>
+            <a href="/files/<%= file.folder %>/<%= file.filename %>"
+              ><%= file.filename %></a
+            >
           </div>
           <% if (file.size) { %>
           <div class="file-size"><%= formatFileSize(file.size) %></div>
           <% } %>
         </li>
         <% } else { %>
-        <li class="file" onclick="window.location.href='/files/<%= file.folder %>/<%= file.filename %>'">
+        <li
+          class="file"
+          onclick="window.location.href='/files/<%= file.folder %>/<%= file.filename %>'"
+        >
           <div class="file-name">
-            <a href="/files/<%= file.folder %>/<%= file.filename %>"><%= file.filename %></a>
+            <a href="/files/<%= file.folder %>/<%= file.filename %>"
+              ><%= file.filename %></a
+            >
           </div>
           <% if (file.size) { %>
           <div class="file-size"><%= formatFileSize(file.size) %></div>
@@ -162,7 +181,6 @@
         <% } %> <% }); %>
       </ul>
     </div>
-    
 
     <script>
       const searchInput = document.getElementById("searchInput");

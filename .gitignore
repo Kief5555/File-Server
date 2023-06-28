@@ -1,8 +1,7 @@
-logs.log
-users.db
 node_modules
 package-lock.json
-/uploads/public/*
-/uploads/private/*
-yarn.lock
-.env
+database/*
+combined.log
+error.log
+files/public/*
+files/private/*
