@@ -36,3 +36,15 @@ PrintedWaste File Server is a Node.js-based file server with an API for file man
 ```node ./index.js```
 The file server should now be running and accessible at `http://localhost:3000.`
 
+
+## API Endpoints
+The file server provides the following API endpoints:
+- `GET /api/files/public/*` Get a list of files and folders and information about them.
+- `POST /api/upload` Upload a file to the server.
+- `POST /api/delete` Delete a file from the server.
+
+## License
+This project is licensed under the [MIT License](https://choosealicense.com/licenses/mit/)
+```
+Feel free to customize the content, add additional sections, or modify it to match your specific project requirements.
+```
