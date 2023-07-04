@@ -28,8 +28,9 @@ PrintedWaste File Server is a Node.js-based file server with an API for file man
    git clone https://github.com/your-username/File-server.git
     ```
 2. Install the dependencies:
-   ```cd File-server
-      npm install
+   ```
+   cd File-server
+   npm install
    ```
 3. Start the server:
 ```node ./index.js```
