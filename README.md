@@ -29,7 +29,8 @@ PrintedWaste File Server is a Node.js-based file server with an API for file man
     ```
 2. Install the dependencies:
    ```cd File-server
-      npm install```
+      npm install
+   ```
 3. Start the server:
 ```node ./index.js```
 The file server should now be running and accessible at `http://localhost:3000.`
