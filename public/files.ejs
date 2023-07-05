@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <title>PrintedWaste</title>
     <meta content="File server" name="description" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link
       rel="icon"
       type="image/png"
@@ -14,6 +15,10 @@
     <meta
       property="og:image"
       content="https://cdn.discordapp.com/attachments/1061755202086125678/1085013775893143563/Boosteriod_Rounded.png"
+    />
+    <link
+      href="https://unpkg.com/boxicons@2.0.7/css/boxicons.min.css"
+      rel="stylesheet"
     />
     <style type="text/css">
       body {
@@ -136,9 +141,126 @@
         color: #ffffff;
         outline: none;
       }
+      .delete-button {
+        background: none;
+        border: none;
+        cursor: pointer;
+        margin-left: 10px;
+      }
+
+      .bx-trash {
+        font-size: 20px;
+        color: #ffffff;
+      }
+      .bx-trash:hover {
+        color: #ff0000;
+      }
+      .popup {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+        border-radius: 10px;
+      }
+
+      .popup-content {
+        background-color: #333;
+        padding: 20px;
+        border-radius: 10px;
+        max-width: 90%;
+        text-align: center;
+        border-radius: 10px;
+        border: 1px solid rgb(255, 255, 255);
+      }
+
+      .popup h3 {
+        margin-top: 0;
+        color: #fff;
+      }
+
+      .popup p {
+        color: #ccc;
+      }
+
+      .popup-close {
+        margin-top: 20px;
+        background-color: #007bff;
+        color: #fff;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 5px;
+        cursor: pointer;
+      }
+
+      .popup-close:hover {
+        background-color: #0056b3;
+      }
+
+      .popup.active {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      #delete-file {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 10px 20px;
+        font-size: 16px;
+        font-weight: bold;
+        color: #ffffff;
+        background-color: #0080ff;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        position: relative;
+        overflow: hidden;
+        margin-top: 10px;
+        margin-right: 20px;
+        transition: background-color 0.3s ease;
+      }
+
+      #delete-file:hover {
+        background-color: red;
+      }
+      #cancel-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 10px 20px;
+        font-size: 16px;
+        font-weight: bold;
+        color: #ffffff;
+        background-color: #0080ff;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        position: relative;
+        overflow: hidden;
+        transition: background-color 0.5s ease;
+      }
+
+      #cancel-button:hover {
+        background-color: rgb(0, 255, 55);
+      }
     </style>
   </head>
   <body>
+    <div id="popup" class="popup">
+      <div class="popup-content">
+        <h3 id="popup-text">Waiting</h3>
+        <p id="popup-info">Waiting for content</p>
+        <button id="popup-close" class="popup-close">Close</button>
+      </div>
+    </div>
     <div class="container">
       <a href="/upload?path=<%= currentDirectory %>">
         <h1 class="heading">Files</h1>
@@ -160,10 +282,17 @@
               ><%= file.filename %></a
             >
           </div>
+          <button
+            class="delete-button"
+            onclick="deleteFile('<%= file.folder %>', '<%= file.filename %>')"
+          >
+            <i class="bx bx-trash"></i>
+          </button>
           <% if (file.size) { %>
           <div class="file-size"><%= formatFileSize(file.size) %></div>
           <% } %>
         </li>
+
         <% } else { %>
         <li
           class="file"
@@ -174,15 +303,140 @@
               ><%= file.filename %></a
             >
           </div>
+          <button
+            class="delete-button"
+            onclick="deleteFile('<%= file.folder %>', '<%= file.filename %>')"
+          >
+            <i class="bx bx-trash"></i>
+          </button>
           <% if (file.size) { %>
           <div class="file-size"><%= formatFileSize(file.size) %></div>
           <% } %>
         </li>
+
         <% } %> <% }); %>
       </ul>
     </div>
 
     <script>
+      function getCookie(name) {
+        var cookieValue = null;
+        if (document.cookie && document.cookie !== "") {
+          var cookies = document.cookie.split(";");
+          for (var i = 0; i < cookies.length; i++) {
+            var cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === name + "=") {
+              cookieValue = decodeURIComponent(
+                cookie.substring(name.length + 1)
+              );
+              break;
+            }
+          }
+        }
+        return cookieValue;
+      }
+      var popup = document.getElementById("popup");
+      var popupClose = document.getElementById("popup-close");
+
+      function showPopup(title, message) {
+        const popupTitle = document.getElementById("popup-text");
+        const popupMessage = document.getElementById("popup-info");
+
+        popupTitle.textContent = title;
+        popupMessage.textContent = message;
+        popup.classList.add("active");
+      }
+
+      function hidePopup() {
+        popup.classList.remove("active");
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      }
+      // Function to delete a file
+      function deleteFile(folder, filename) {
+        event.stopPropagation(); // Stop event propagation to prevent file download
+        showPopup(
+          "Confirm",
+          `This action cannot be undone. (File name: "${filename}")`
+        );
+        //add a button to confirm
+        const popupMessage = document.getElementById("popup-info");
+
+        const popupForm = document.createElement("form");
+        popupForm.className = "popup-form";
+        popupForm.id = "popup-form";
+
+        const submitButton = document.createElement("button");
+        submitButton.type = "submit";
+        submitButton.textContent = "Delete";
+        submitButton.className = "popup-button";
+        submitButton.id = "delete-file";
+
+        const cancelButton = document.createElement("button");
+        cancelButton.type = "button";
+        cancelButton.textContent = "Cancel";
+        cancelButton.className = "popup-button";
+        cancelButton.id = "cancel-button";
+
+        popupForm.appendChild(submitButton);
+        popupForm.appendChild(cancelButton);
+        popupMessage.appendChild(popupForm);
+
+        //if cancel button is pressed, close popup
+        cancelButton.addEventListener("click", () => {
+          hidePopup();
+        });
+
+        //Hide close button
+        const closeButton = document.getElementById("popup-close");
+        closeButton.style.display = "none";
+
+        //if log out button is pressed, log out
+        submitButton.addEventListener("click", (event) => {
+          event.preventDefault();
+          console.log("shard");
+          var xhr = new XMLHttpRequest();
+          xhr.open(
+            "POST",
+            `/api/delete/?folder=${folder}&file=${filename}`,
+            true
+          );
+          xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
+          xhr.setRequestHeader("username", getCookie("username"));
+          xhr.setRequestHeader("password", getCookie("password"));
+
+          xhr.onload = function () {
+            if (xhr.status === 200) {
+              // File deleted successfully, you can handle the response here if needed
+              // For example, you could remove the file from the DOM
+              showPopup("Success", "File deleted successfully");
+              setTimeout(() => {
+                hidePopup();
+              }, 1000);
+            } else if (xhr.status === 401) {
+              showPopup("Error", "You are not authorized to delete this file");
+              setTimeout(() => {
+                hidePopup();
+              }, 1000);
+            } else {
+              showPopup("Error", "An error occurred while deleting the file");
+              setTimeout(() => {
+                hidePopup();
+              }, 1000);
+            }
+          };
+
+          xhr.onerror = function () {
+            // Request error, handle the error here
+            alert("An error occurred while deleting the file");
+            console.error(xhr.statusText);
+          };
+
+          xhr.send();
+        });
+      }
+
       const searchInput = document.getElementById("searchInput");
       const files = document.getElementsByClassName("file");
 

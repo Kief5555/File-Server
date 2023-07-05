@@ -4,7 +4,7 @@ const mime = require("mime-types");
 
 const publicUploadPath = path.join(__dirname, "..", "..", "files", "public");
 module.exports = {
-  Name: "API",
+  Name: "API - Public Files",
   Route: "/api/files/public/*",
   Method: "GET",
   Log: null, // Set to 'File', 'Console', or 'Null'

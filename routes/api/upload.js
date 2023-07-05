@@ -2,7 +2,7 @@ const multer = require('multer');
 const path = require('path');
 
 module.exports = {
-  Name: 'Upload',
+  Name: 'Api- Upload',
   Route: '/api/upload',
   Method: 'POST',
   Log: 'File', // Set to 'File', 'Console', or 'Null'
