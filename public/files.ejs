@@ -58,7 +58,7 @@
         padding: 10px;
         border: 1px solid #666666;
         margin-bottom: 10px;
-        background-color: #1F2937;
+        background-color: #1f2937;
         box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
         transition: transform 0.3s, box-shadow 0.3s;
         overflow: hidden;
@@ -137,7 +137,7 @@
         border: none;
         border-radius: 5px;
         font-size: 16px;
-        background-color: #1F2937;
+        background-color: #1f2937;
         color: #ffffff;
         outline: none;
       }
@@ -282,15 +282,15 @@
               ><%= file.filename %></a
             >
           </div>
-          <button
-            class="delete-button"
-            onclick="deleteFile('<%= file.folder %>', '<%= file.filename %>')"
-          >
-            <i class="bx bx-trash"></i>
-          </button>
           <% if (file.size) { %>
           <div class="file-size"><%= formatFileSize(file.size) %></div>
           <% } %>
+          <button
+          class="delete-button"
+          onclick="deleteFile('<%= file.folder %>', '<%= file.filename %>')"
+        >
+          <i class="bx bx-trash"></i>
+        </button>
         </li>
 
         <% } else { %>
@@ -303,17 +303,16 @@
               ><%= file.filename %></a
             >
           </div>
-          <button
-            class="delete-button"
-            onclick="deleteFile('<%= file.folder %>', '<%= file.filename %>')"
-          >
-            <i class="bx bx-trash"></i>
-          </button>
           <% if (file.size) { %>
           <div class="file-size"><%= formatFileSize(file.size) %></div>
           <% } %>
+          <button
+          class="delete-button"
+          onclick="deleteFile('<%= file.folder %>', '<%= file.filename %>')"
+        >
+          <i class="bx bx-trash"></i>
+        </button>
         </li>
-
         <% } %> <% }); %>
       </ul>
     </div>
