@@ -20,7 +20,7 @@ module.exports = {
   Name: "Public Files",
   Route: "/files/public/*",
   Method: "GET",
-  Log: "Console", // Set to 'File', 'Console', or 'Null'
+  Log: "File", // Set to 'File', 'Console', or 'Null'
   Sqlite: null,
   /**
    * Handle the request.
