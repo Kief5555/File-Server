@@ -32,7 +32,7 @@ module.exports = {
     const filePath = path.resolve(publicUploadPath, req.params[0]);
     // Check if requested path is a directory
     if (!fs.existsSync(filePath)) {
-      res.status(404).send("File not found.");
+      res.status(404).sendFile(path.join(__dirname, "..", "..", "public", "FNF.html"));
       return;
     }
     const stats = fs.statSync(filePath);
@@ -40,7 +40,7 @@ module.exports = {
       fs.readdir(filePath, (err, files) => {
         if (err) {
           console.error(err);
-          res.status(500).send("Internal server error");
+          res.status(500).sendFile(path.join(__dirname, "..", "..", "public", "500.html"));
           return;
         }
 
@@ -83,7 +83,7 @@ module.exports = {
 
     // If requested path is not a directory, serve the file
     if (!fs.existsSync(filePath)) {
-      res.status(404).send("File not found.");
+      res.status(404).sendFile(path.join(__dirname, "..", "..", "public", "FNF.html"));
       return;
     }
 
@@ -116,7 +116,7 @@ module.exports = {
           }
         });
       } catch {
-        res.status(500).send("Internal server error (File not found?)");
+        res.status(500).sendFile(path.join(__dirname, "..", "..", "public", "500.html"));
       }
     }
   },

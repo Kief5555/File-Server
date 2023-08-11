@@ -146,6 +146,8 @@
         border: none;
         cursor: pointer;
         margin-left: 10px;
+        /*Make it hidden*/
+        display: none;
       }
 
       .bx-trash {
@@ -286,11 +288,11 @@
           <div class="file-size"><%= formatFileSize(file.size) %></div>
           <% } %>
           <button
-          class="delete-button"
-          onclick="deleteFile('<%= file.folder %>', '<%= file.filename %>')"
-        >
-          <i class="bx bx-trash"></i>
-        </button>
+            class="delete-button"
+            onclick="deleteFile('<%= file.folder %>', '<%= file.filename %>')"
+          >
+            <i class="bx bx-trash"></i>
+          </button>
         </li>
 
         <% } else { %>
@@ -307,11 +309,11 @@
           <div class="file-size"><%= formatFileSize(file.size) %></div>
           <% } %>
           <button
-          class="delete-button"
-          onclick="deleteFile('<%= file.folder %>', '<%= file.filename %>')"
-        >
-          <i class="bx bx-trash"></i>
-        </button>
+            class="delete-button"
+            onclick="deleteFile('<%= file.folder %>', '<%= file.filename %>')"
+          >
+            <i class="bx bx-trash"></i>
+          </button>
         </li>
         <% } %> <% }); %>
       </ul>
@@ -352,6 +354,17 @@
           window.location.reload();
         }, 1000);
       }
+      var delete1 = document.getElementsByName("delete-button");
+
+      const deleteButtons = document.querySelectorAll(".delete-button");
+
+      deleteButtons.forEach((deleteButton) => {
+        if (getCookie("username")) {
+          deleteButton.style.display = "block";
+        } else {
+          deleteButton.style.display = "none";
+        }
+      });
       // Function to delete a file
       function deleteFile(folder, filename) {
         event.stopPropagation(); // Stop event propagation to prevent file download
@@ -390,6 +403,8 @@
         //Hide close button
         const closeButton = document.getElementById("popup-close");
         closeButton.style.display = "none";
+
+        //if there is a username, show the delete button
 
         //if log out button is pressed, log out
         submitButton.addEventListener("click", (event) => {
