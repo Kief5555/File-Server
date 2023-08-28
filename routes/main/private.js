@@ -16,6 +16,8 @@ function formatFileSize(size) {
     return size.toFixed(2) + " " + units[unitIndex];
 }
 
+require("dotenv").config();
+
 module.exports = {
     Name: "Private Files",
     Route: "/files/private/*",
@@ -101,10 +103,6 @@ module.exports = {
             return;
         } else {
             const password = req.query.PASSWORD;
-            if (!process.env.PASSWORD) {
-                console.error("!!!!!!No password set in .env file!!!!!!");
-                res.status(403).sendFile(path.join(__dirname, "..", "..", "public", "403.html"));
-            }
             if (password === process.env.PASSWORD) {
                 if (
                     [
