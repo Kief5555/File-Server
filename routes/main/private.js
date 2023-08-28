@@ -15,7 +15,8 @@ function formatFileSize(size) {
     }
     return size.toFixed(2) + " " + units[unitIndex];
 }
-
+const test = require('dotenv').config()
+console.log(test)
 require("dotenv").config();
 
 module.exports = {
