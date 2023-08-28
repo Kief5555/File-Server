@@ -100,39 +100,41 @@ module.exports = {
                 res.status(500).sendFile(path.join(__dirname, "..", "..", "public", "500.html"));
             }
             return;
-        }
-        const password = req.query.password;
-        if (password === process.env.PASSWORD) {
-            if (
-                [
-                    ".html",
-                    ".json",
-                    ".txt",
-                    ".mov",
-                    ".jpg",
-                    ".png",
-                    ".jpeg",
-                    ".mp4",
-                ].includes(ext)
-            ) {
-                // If file has .html, .json, or .txt extension, render it
-                res.sendFile(filePath);
-            } else {
-                try {
+        } else {
+            const password = req.query.password;
+            console.log(process.env.PASSWORD)
+            if (password === process.env.PASSWORD) {
+                if (
+                    [
+                        ".html",
+                        ".json",
+                        ".txt",
+                        ".mov",
+                        ".jpg",
+                        ".png",
+                        ".jpeg",
+                        ".mp4",
+                    ].includes(ext)
+                ) {
+                    // If file has .html, .json, or .txt extension, render it
+                    res.sendFile(filePath);
+                } else {
+                    try {
 
-                    res.download(filePath, (err) => {
-                        if (err) {
-                            console.error(err);
-                        } else {
-                        }
-                    });
-                } catch {
-                    res.status(500).sendFile(path.join(__dirname, "..", "..", "public", "500.html"));
+                        res.download(filePath, (err) => {
+                            if (err) {
+                                console.error(err);
+                            } else {
+                            }
+                        });
+                    } catch {
+                        res.status(500).sendFile(path.join(__dirname, "..", "..", "public", "500.html"));
+                    }
                 }
             }
-        }
-        else {
-            res.status(403).sendFile(path.join(__dirname, "..", "..", "public", "403.html"));
+            else {
+                res.status(403).sendFile(path.join(__dirname, "..", "..", "public", "403.html"));
+            }
         }
     },
 };
