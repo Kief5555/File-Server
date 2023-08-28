@@ -16,8 +16,7 @@ function formatFileSize(size) {
     return size.toFixed(2) + " " + units[unitIndex];
 }
 
-const env = require("dotenv").config();
-
+require("dotenv").config();
 module.exports = {
     Name: "Private Files",
     Route: "/files/private/*",
@@ -101,41 +100,39 @@ module.exports = {
                 res.status(500).sendFile(path.join(__dirname, "..", "..", "public", "500.html"));
             }
             return;
-        } else {
-            console.log(env.parsed)
-            const password = req.query.password;
-            if (password === env.parsed.PASSWORD) {
-                if (
-                    [
-                        ".html",
-                        ".json",
-                        ".txt",
-                        ".mov",
-                        ".jpg",
-                        ".png",
-                        ".jpeg",
-                        ".mp4",
-                    ].includes(ext)
-                ) {
-                    // If file has .html, .json, or .txt extension, render it
-                    res.sendFile(filePath);
-                } else {
-                    try {
+        }
+        const password = req.query.password;
+        if (password === process.env.PASSWORD) {
+            if (
+                [
+                    ".html",
+                    ".json",
+                    ".txt",
+                    ".mov",
+                    ".jpg",
+                    ".png",
+                    ".jpeg",
+                    ".mp4",
+                ].includes(ext)
+            ) {
+                // If file has .html, .json, or .txt extension, render it
+                res.sendFile(filePath);
+            } else {
+                try {
 
-                        res.download(filePath, (err) => {
-                            if (err) {
-                                console.error(err);
-                            } else {
-                            }
-                        });
-                    } catch {
-                        res.status(500).sendFile(path.join(__dirname, "..", "..", "public", "500.html"));
-                    }
+                    res.download(filePath, (err) => {
+                        if (err) {
+                            console.error(err);
+                        } else {
+                        }
+                    });
+                } catch {
+                    res.status(500).sendFile(path.join(__dirname, "..", "..", "public", "500.html"));
                 }
             }
-            else {
-                res.status(403).sendFile(path.join(__dirname, "..", "..", "public", "403.html"));
-            }
+        }
+        else {
+            res.status(403).sendFile(path.join(__dirname, "..", "..", "public", "403.html"));
         }
     },
 };
