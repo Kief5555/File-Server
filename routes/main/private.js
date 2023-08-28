@@ -15,9 +15,8 @@ function formatFileSize(size) {
     }
     return size.toFixed(2) + " " + units[unitIndex];
 }
-const test = require('dotenv').config()
-console.log(test)
-require("dotenv").config();
+
+const env = require("dotenv").config();
 
 module.exports = {
     Name: "Private Files",
@@ -103,8 +102,8 @@ module.exports = {
             }
             return;
         } else {
-            const password = req.query.PASSWORD;
-            if (password === process.env.PASSWORD) {
+            const password = req.query.password;
+            if (password === env.parsed.PASSWORD) {
                 if (
                     [
                         ".html",
