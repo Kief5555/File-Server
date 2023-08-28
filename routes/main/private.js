@@ -16,6 +16,7 @@ function formatFileSize(size) {
     return size.toFixed(2) + " " + units[unitIndex];
 }
 
+require("dotenv").config();
 module.exports = {
     Name: "Private Files",
     Route: "/files/private/*",
