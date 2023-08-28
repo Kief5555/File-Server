@@ -30,6 +30,10 @@ module.exports = {
    * @param {import('sqlite3').Database} db - The database connection object.
    */
   async handle(req, res, db) {
+    //if public folder does not exist, create it
+    if (!fs.existsSync(publicUploadPath)) {
+      fs.mkdirSync(publicUploadPath);
+    }
     fs.readdir(publicUploadPath, (err, files) => {
       if (err) {
         console.error(err);

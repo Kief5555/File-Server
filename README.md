@@ -37,6 +37,10 @@ PrintedWaste File Server is a Node.js-based file server with an API for file man
 The file server should now be running and accessible at `http://localhost:3000.`
 
 
+## Config
+- `/config/expections.json`, this is where you configure what files are allowed through /files/private/*. Keep in mind these are file extensions
+
+
 ## API Endpoints
 The file server provides the following API endpoints:
 - `GET /api/files/public/*` Get a list of files and folders and information about them.

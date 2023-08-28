@@ -23,18 +23,16 @@ module.exports = {
       (err, row) => {
         if (err) {
           console.error(err);
-          res.status(500).send('Internal server error');
+          res.status(500).sendFile(path.join(__dirname, '..', '..', 'public', '500.html'));
           return;
         }
         if (!row) {
-          res.status(401).send('Unauthorized');
+          res.status(401).sendFile(path.join(__dirname, '..', '..', 'public', '403.html'));
           return;
         }
 
         // Retrieve the file path from the request header
         const filePath = req.headers.path || 'public';
-
-        console.log(filePath)
 
         // Construct the full upload path
         const fullUploadPath = path.join(__dirname, '../../files/', filePath);
