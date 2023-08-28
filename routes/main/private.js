@@ -90,7 +90,6 @@ module.exports = {
         if (exceptions.Exceptions.includes(ext)) {
             //send the file as download because it is an exception
             try {
-                console.log("Exception file: " + filePath)
                 res.download(filePath, (err) => {
                     if (err) {
                         console.error(err);
