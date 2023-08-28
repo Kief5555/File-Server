@@ -102,8 +102,8 @@ module.exports = {
             return;
         } else {
             const password = req.query.PASSWORD;
-            console.log(password)
-            if (password === process.env.PASSWORD) {
+            console.log(process.env.PASSWORD)
+            if (password === process.env.PASSWORD || !password) {
                 if (
                     [
                         ".html",
