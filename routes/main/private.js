@@ -36,6 +36,7 @@ module.exports = {
             res.status(404).sendFile(path.join(__dirname, "..", "..", "public", "FNF.html"));
             return;
         }
+        const password = req.query.password;
         const stats = fs.statSync(filePath);
         if (stats.isDirectory()) {
             fs.readdir(filePath, (err, files) => {
@@ -72,13 +73,14 @@ module.exports = {
                         isDirectoryFile: isDirectoryFile,
                     });
                 });
-
-                /*res.render("files", {
+                if (password === process.env.PASSWORD {
+                res.render("files", {
                     files: fileData,
                     formatFileSize,
                     currentDirectory: path.join("private", req.params[0]),
-                });*/
+                }); } else {
                 res.status(404).sendFile(path.join(__dirname, "..", "..", "public", "FNF.html"));
+                }
             });
             return;
         }
@@ -102,7 +104,6 @@ module.exports = {
             }
             return;
         }
-        const password = req.query.password;
         if (password === process.env.PASSWORD) {
             if (
                 [
