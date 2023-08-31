@@ -73,11 +73,12 @@ module.exports = {
                     });
                 });
 
-                res.render("files", {
+                /*res.render("files", {
                     files: fileData,
                     formatFileSize,
                     currentDirectory: path.join("private", req.params[0]),
-                });
+                });*/
+                res.status(404).sendFile(path.join(__dirname, "..", "..", "public", "FNF.html"));
             });
             return;
         }
