@@ -74,13 +74,13 @@ module.exports = {
                     });
                 });
                 if (password === process.env.PASSWORD) {
-                res.render("files", {
-                    files: fileData,
-                    formatFileSize,
-                    currentDirectory: path.join("private", req.params[0]),
-                });
-                 } else {
-                res.status(404).sendFile(path.join(__dirname, "..", "..", "public", "FNF.html"));
+                    res.render("files", {
+                        files: fileData,
+                        formatFileSize,
+                        currentDirectory: path.join("private", req.params[0]),
+                    });
+                } else {
+                    res.status(404).sendFile(path.join(__dirname, "..", "..", "public", "FNF.html"));
                 }
             });
             return;
