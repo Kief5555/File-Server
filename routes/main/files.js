@@ -108,9 +108,14 @@ module.exports = {
 
         res.download(filePath, (err) => {
           if (err) {
-            // Handle error, but keep in mind the response may be partially-sent
-            // so check res.headersSent
-            console.error(err);
+            //check if downlaod was aborted, if so do nothing
+            if (err.code === "ECONNABORTED") {
+              return;
+            } else {
+              console.error(err);
+              return;
+            }
+            
           } else {
             // decrement a download credit, etc.
           }
