@@ -39,13 +39,16 @@ The file server should now be running and accessible at `http://localhost:3000.`
 
 ## Config
 - `/config/expections.json`, this is where you configure what files are allowed through /files/private/*. Keep in mind these are file extensions
-
+- `/config/config.json`, this is where you configure the server. 
+ There is `Roatating`, that tells the server for the `/private/` folder to use 1 time passwords generated through `/auth/key/create`
 
 ## API Endpoints
 The file server provides the following API endpoints:
 - `GET /api/files/public/*` Get a list of files and folders and information about them.
-- `POST /api/upload` Upload a file to the server.
-- `POST /api/delete` Delete a file from the server.
+- `POST /api/upload/` Upload a file to the server.
+- `POST /api/delete/*` Delete a file from the server.
+- `POST /api/createDir/*` Create a directory on the server.
+- `POST /auth/key/create` Create a one-time password for the private folder/files.
 
 ## License
 This project is licensed under the [MIT License](https://choosealicense.com/licenses/mit/)
