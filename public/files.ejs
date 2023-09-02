@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <title>PrintedWaste</title>
-    <meta content="File server | <%= currentDirectory %>" name="description" />
+    <meta content="File server | /<%= currentDirectory %>" name="description" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link
       rel="icon"
@@ -11,7 +11,7 @@
       href="https://cdn.discordapp.com/attachments/1061755202086125678/1085013775893143563/Boosteriod_Rounded.png"
     />
     <meta property="og:title" content="PrintedWaste" />
-    <meta property="og:description" content="File server | <%= currentDirectory %>" />
+    <meta property="og:description" content="File server | /<%= currentDirectory %>" />
     <meta
       property="og:image"
       content="https://cdn.discordapp.com/attachments/1061755202086125678/1085013775893143563/Boosteriod_Rounded.png"
@@ -350,9 +350,6 @@
 
       function hidePopup() {
         popup.classList.remove("active");
-        setTimeout(() => {
-          window.location.reload();
-        }, 1000);
       }
       var delete1 = document.getElementsByName("delete-button");
 
@@ -427,6 +424,7 @@
               showPopup("Success", "File deleted successfully");
               setTimeout(() => {
                 hidePopup();
+                window.location.reload();
               }, 1000);
             } else if (xhr.status === 401) {
               showPopup("Error", "You are not authorized to delete this file");
