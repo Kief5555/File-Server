@@ -30,9 +30,10 @@ module.exports = {
    */
   async handle(req, res, db) {
     const requestPath = path.normalize(req.params[0]);
+    console.log(requestPath)
     const filePath = path.resolve(publicUploadPath, requestPath);
     //check if the path starts with /files/public, if not the user could be trying to access the linux file system
-    if (filePath.startsWith("/files/public")) {
+    if (requestPath.startsWith("/files/public")) {
       res.status(403).sendFile(path.join(__dirname, "..", "..", "public", "403.html"));
       return;
     }
