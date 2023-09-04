@@ -30,7 +30,8 @@ module.exports = {
      * @param {import('sqlite3').Database} db - The database connection object.
      */
     async handle(req, res, db) {
-        const filePath = path.resolve(privateUploadPath, req.params[0]);
+        const requestPath = path.normalize(req.params[0]);
+        const filePath = path.resolve(privateUploadPath, requestPath);
         // Check if requested path is a directory
         if (!fs.existsSync(filePath)) {
             res.status(404).sendFile(path.join(__dirname, "..", "..", "public", "FNF.html"));
