@@ -28,6 +28,7 @@ const port = 3000;
 
 // Configure Winston logger
 const logger = winston.createLogger({
+  filename: "logs.log",
   level: "info",
   format: winston.format.combine(
     winston.format.colorize(),
