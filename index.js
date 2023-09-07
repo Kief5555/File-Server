@@ -1,7 +1,7 @@
 /******************************************************
  * Author:    Kiefer
  * Date:      2023-4-12 (MM-DD-YYYY)
- * Description: API Server
+ * Description: Fule-Server
  * Version:   1.0.0
  * License:   MIT
  ******************************************************/
@@ -41,7 +41,7 @@ const logger = winston.createLogger({
       return `${formattedTimestamp} [${formattedLevel}] ${formattedMeta} ${message}`;
     })
   ),
-  defaultMeta: { service: "api-server" },
+  defaultMeta: { service: "file-server" },
   transports: [
     new winston.transports.Console(),
     new winston.transports.File({ filename: "error.log", level: "error" }),
