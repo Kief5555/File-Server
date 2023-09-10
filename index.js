@@ -24,7 +24,7 @@ const createDatabaseConnection = (dbFile) => {
 };
 
 const app = express();
-const port = 3000;
+const port = 3000 || process.env.PORT;
 
 // Configure Winston logger
 const logger = winston.createLogger({
