@@ -31,6 +31,7 @@ module.exports = {
   async handle(req, res, db) {
     const requestPath = path.normalize(req.params[0]);
     const filePath = path.resolve(publicUploadPath, requestPath);
+    console.log('[DEBUG]: Accessing ' + filePath)
     if (requestPath.startsWith("/" || "." || "*") || !filePath.startsWith(publicUploadPath)) {
       res.status(403).sendFile(path.join(__dirname, "..", "..", "public", "403.html"));
       return;
