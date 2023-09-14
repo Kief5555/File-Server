@@ -116,7 +116,7 @@ const loadRoutesFromDirectory = (directoryPath, table, routePrefix = "") => {
           //CVE checks. 1) Check if the route contains path escape characters (eg ../ or ** or) 2) Check if the route contains a null byte (eg %00) 
           //Take action by 403ing the request if either of the above checks are true
           console.log(req.originalUrl)
-          if (req.originalUrl.includes("../") || req.originalUrl.includes("%00") || req.originalUrl.includes("**")) {
+          if (req.originalUrl.includes("../") || req.originalUrl.includes("%00") || req.originalUrl.includes("**") || req.originalUrl.includes("/")) {
             res.status(403).sendFile(path.join(__dirname, "public", "403.html"));
             return;
           };
