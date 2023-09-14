@@ -1,8 +1,9 @@
 const multer = require('multer');
 const path = require('path');
-
+const bcrypt = require('bcrypt'); // Import bcrypt
+const config = require('../../config/config.json');
 module.exports = {
-  Name: 'Api- Upload',
+  Name: 'API - Upload',
   Route: '/api/upload',
   Method: 'POST',
   Log: 'File', // Set to 'File', 'Console', or 'Null'
@@ -16,21 +17,39 @@ module.exports = {
   async handle(req, res, db) {
     // Authorize user (username and password in headers)
     // If not authorized, return 401
+    if(config.Authentication == false ){
+      res.status(401).json({ message: 'Authentication failed' });
+    }
+    const username = req.headers.username;
+    const password = req.headers.password;
 
-    db.get(
-      'SELECT * FROM users WHERE username = ? AND password = ?',
-      [req.headers.username, req.headers.password],
-      (err, row) => {
-        if (err) {
-          console.error(err);
-          res.status(500).sendFile(path.join(__dirname, '..', '..', 'public', '500.html'));
+    // Retrieve the user's hashed password from the database
+    db.get('SELECT * FROM users WHERE username = ?', [username], (err, row) => {
+      if (err) {
+        console.error(err);
+        res.status(500).sendFile(path.join(__dirname, '..', '..', 'public', '500.html'));
+        return;
+      }
+
+      if (!row) {
+        res.status(401).sendFile(path.join(__dirname, '..', '..', 'public', '403.html'));
+        return;
+      }
+
+      // Compare the provided password with the hashed password from the database
+      bcrypt.compare(password, row.password, (compareErr, result) => {
+        if (compareErr) {
+          console.error(compareErr);
+          res.status(500).send('Authentication error');
           return;
         }
-        if (!row) {
-          res.status(401).sendFile(path.join(__dirname, '..', '..', 'public', '403.html'));
+
+        if (!result) {
+          res.status(401).json({ message: 'Authentication failed' });
           return;
         }
 
+        // If authentication is successful, proceed with file upload
         // Retrieve the file path from the request header
         const filePath = req.headers.path || 'public';
 
@@ -49,15 +68,15 @@ module.exports = {
         const upload = multer({ storage });
 
         // Handle the file upload
-        upload.single('filepond')(req, res, (err) => {
-          if (err) {
+        upload.single('filepond')(req, res, (uploadErr) => {
+          if (uploadErr) {
             res.status(500).send('Error uploading file');
             return;
           }
           // File uploaded successfully
           res.status(200).send('File uploaded successfully');
         });
-      }
-    );
+      });
+    });
   },
 };

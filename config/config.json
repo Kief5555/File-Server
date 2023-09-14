@@ -1,3 +1,4 @@
 {
-    "Rotating": false
+    "Rotating": false,
+    "Authentication": false
 }

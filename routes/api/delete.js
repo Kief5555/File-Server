@@ -1,6 +1,7 @@
 const path = require("path");
 const fs = require("fs");
-const mime = require("mime-types");
+const bcrypt = require('bcrypt'); // Import bcrypt
+const config = require('../../config/config.json');
 
 module.exports = {
   Name: "API - Delete File",
@@ -15,20 +16,41 @@ module.exports = {
    * @param {import('sqlite3').Database} db - The database connection object.
    */
   async handle(req, res, db) {
-    db.get(
-      "SELECT * FROM users WHERE username = ? AND password = ?",
-      [req.headers.username, req.headers.password],
-      (err, row) => {
-        if (err) {
-          console.error(err);
-          res.status(500).send("Internal server error");
-          return;
-        }
-        if (!row) {
-          res.status(401).send("Unauthorized");
+    // Authorize user (username and password in headers)
+    // If not authorized, return 401
+    if(config.Authentication == false ){
+      res.status(401).json({ message: 'Authentication failed' });
+    }
+    const username = req.headers.username;
+    const password = req.headers.password;
+
+    // Retrieve the user's hashed password from the database
+    db.get("SELECT * FROM users WHERE username = ?", [username], (err, row) => {
+      if (err) {
+        console.error(err);
+        res.status(500).send("Internal server error");
+        return;
+      }
+
+      if (!row) {
+        res.status(401).send("Unauthorized");
+        return;
+      }
+
+      // Compare the provided password with the hashed password from the database
+      bcrypt.compare(password, row.password, (compareErr, result) => {
+        if (compareErr) {
+          console.error(compareErr);
+          res.status(500).send("Authentication error");
           return;
         }
 
+        if (!result) {
+          res.status(401).send("Authentication failed");
+          return;
+        }
+
+        // Once authenticated, continue with file deletion logic
         const folder = req.query.folder || "public";
         const filename = req.query.file;
 
@@ -66,7 +88,7 @@ module.exports = {
             });
           }
         });
-      }
-    );
+      });
+    });
   },
 };

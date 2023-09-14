@@ -17,6 +17,10 @@ module.exports = {
    */
   async handle(req, res, db) {
     const filePath = path.resolve(publicUploadPath, req.params[0]);
+    if (!filePath.startsWith(publicUploadPath)) {
+      res.status(403).sendFile(path.join(__dirname, "..", "..", "public", "403.html"));
+      return;
+    }
     // Check if requested path is a directory
     if (!fs.existsSync(filePath)) {
       res.status(404).json({ message: "File not found." });

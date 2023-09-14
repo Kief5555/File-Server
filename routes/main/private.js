@@ -36,7 +36,7 @@ module.exports = {
         if (requestPath.startsWith("/" || "." || "*") || filePath.startsWith(privateUploadPath)) {
             res.status(403).sendFile(path.join(__dirname, "..", "..", "public", "403.html"));
             return;
-          }
+        }
         const password = req.query.password;
         const stats = fs.statSync(filePath);
         if (stats.isDirectory()) {

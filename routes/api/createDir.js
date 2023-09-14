@@ -1,8 +1,7 @@
 const path = require("path");
 const fs = require("fs");
-const mime = require("mime-types");
-
 const publicUploadPath = path.join(__dirname, "..", "..", "files", "public");
+
 module.exports = {
   Name: "API - Create Directory",
   Route: "/api/createDir/*",
@@ -17,21 +16,31 @@ module.exports = {
    */
   async handle(req, res, db) {
     db.get(
-        'SELECT * FROM users WHERE username = ? AND password = ?',
-        [req.headers.username, req.headers.password],
-        (err, row) => {
-          if (err) {
-            console.error(err);
-            res.status(500).send('Internal server error');
-            return;
-          }
-          if (!row) {
-            res.status(401).send('Unauthorized');
-            return;
-          }
-          //create directory
-          
+      'SELECT * FROM users WHERE username = ? AND password = ?',
+      [req.headers.username, req.headers.password],
+      (err, row) => {
+        if (err) {
+          console.error(err);
+          res.status(500).send('Internal server error');
+          return;
         }
-      );
+        if (!row) {
+          res.status(401).send('Unauthorized');
+          return;
+        }
+
+        // Create a directory based on the URL path
+        const dirPath = path.join(publicUploadPath, req.params[0]);
+
+        fs.mkdir(dirPath, { recursive: true }, (mkdirErr) => {
+          if (mkdirErr) {
+            res.status(500).send('Error creating directory');
+            return;
+          }
+
+          res.json({ message: 'Directory created successfully' });
+        });
+      }
+    );
   },
 };
