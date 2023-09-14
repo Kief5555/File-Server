@@ -17,7 +17,7 @@ module.exports = {
   async handle(req, res, db) {
     db.get(
       'SELECT * FROM users WHERE username = ? AND password = ?',
-      [req.headers.username, req.headers.password],
+      [req.body.username, req.body.password],
       (err, row) => {
         if (err) {
           console.error(err);
