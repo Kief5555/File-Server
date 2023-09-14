@@ -36,8 +36,6 @@ module.exports = {
       res.status(403).sendFile(path.join(__dirname, "..", "..", "public", "403.html"));
       return;
     }
-    console.log("FP:" + filePath)
-    console.log("PUP:" + publicUploadPath)
     if(!filePath.startsWith(publicUploadPath)) {
       res.status(403).sendFile(path.join(__dirname, "..", "..", "public", "403.html"));
       return;
