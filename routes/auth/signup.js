@@ -13,7 +13,7 @@ module.exports = {
    * @param {import('sqlite3').Database} db - The database connection object.
    */
   async handle(req, res, db) {
-    // return res.status(403).send("Access is denied");
+     return res.status(403).send("Access is denied");
     const username = req.body.username;
     const password = req.body.password;
 
