@@ -24,7 +24,7 @@ const createDatabaseConnection = (dbFile) => {
 };
 
 const app = express();
-const port = process.env.PORT || 3000
+const port = process.env.PORT || 3000;
 
 // Configure Winston logger
 const logger = winston.createLogger({
@@ -54,9 +54,8 @@ app.use(cors());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use("/favicon.ico", express.static("public/favicon.ico"));
-app.set('views', path.join(__dirname, 'public'));
+app.set("views", path.join(__dirname, "public"));
 app.set("view engine", "ejs");
-
 
 const loadRoutesFromDirectory = (directoryPath, table, routePrefix = "") => {
   const routeFiles = fs.readdirSync(directoryPath, { withFileTypes: true });
@@ -113,42 +112,50 @@ const loadRoutesFromDirectory = (directoryPath, table, routePrefix = "") => {
         }
 
         app[Method.toLowerCase()](`${Route}`, async (req, res, next) => {
-          //CVE checks. 1) Check if the route contains path escape characters (eg ../ or ** or) 2) Check if the route contains a null byte (eg %00) 
+          //CVE checks. 1) Check if the route contains path escape characters (eg ../ or ** or) 2) Check if the route contains a null byte (eg %00)
           //Take action by 403ing the request if either of the above checks are true
-          if(req.originalUrl === "/") {
+          if (req.originalUrl === "/") {
             const result = await handle.bind(routeModule)(req, res, db);
             if (result) {
               try {
                 res.send(result);
               } catch (error) {}
             }
-          }
-          if (req.originalUrl.includes("../") || req.originalUrl.includes("%00") || req.originalUrl.includes("**") || !req.originalUrl.includes("/files/")) {
-            res.status(403).sendFile(path.join(__dirname, "public", "403.html"));
-            return;
-          };
-          const dbFile = routeModule.Sqlite;
-          const db = dbFile ? createDatabaseConnection(dbFile) : null;
+          } else {
+            if (
+              req.originalUrl.includes("../") ||
+              req.originalUrl.includes("%00") ||
+              req.originalUrl.includes("**") ||
+              !req.originalUrl.includes("/files/")
+            ) {
+              res
+                .status(403)
+                .sendFile(path.join(__dirname, "public", "403.html"));
+              return;
+            }
+            const dbFile = routeModule.Sqlite;
+            const db = dbFile ? createDatabaseConnection(dbFile) : null;
 
-          try {
-            const result = await handle.bind(routeModule)(req, res, db);
-            if (result) {
-              try {
-                res.send(result);
-              } catch (error) {}
-            }
-          } catch (error) {
-            next(error);
-          } finally {
-            if (db) {
-              db.close((err) => {
-                if (err) {
-                  console.error(
-                    "Error closing database connection:",
-                    err.message
-                  );
-                }
-              });
+            try {
+              const result = await handle.bind(routeModule)(req, res, db);
+              if (result) {
+                try {
+                  res.send(result);
+                } catch (error) {}
+              }
+            } catch (error) {
+              next(error);
+            } finally {
+              if (db) {
+                db.close((err) => {
+                  if (err) {
+                    console.error(
+                      "Error closing database connection:",
+                      err.message
+                    );
+                  }
+                });
+              }
             }
           }
         });
