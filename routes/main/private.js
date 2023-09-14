@@ -33,7 +33,7 @@ module.exports = {
         const requestPath = path.normalize(req.params[0]);
         const filePath = path.resolve(privateUploadPath, requestPath);
         // Check if requested path is a directory
-        if (requestPath.startsWith("/" || ".")) {
+        if (requestPath.startsWith("/" || "." || "*")) {
             res.status(403).sendFile(path.join(__dirname, "..", "..", "public", "403.html"));
             return;
           }
