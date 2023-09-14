@@ -125,8 +125,7 @@ const loadRoutesFromDirectory = (directoryPath, table, routePrefix = "") => {
             if (
               req.originalUrl.includes("../") ||
               req.originalUrl.includes("%00") ||
-              req.originalUrl.includes("**") ||
-              !req.originalUrl.includes("/files/")
+              req.originalUrl.includes("**")
             ) {
               res
                 .status(403)

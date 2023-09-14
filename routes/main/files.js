@@ -32,7 +32,7 @@ module.exports = {
     const requestPath = path.normalize(req.params[0]);
     const filePath = path.resolve(publicUploadPath, requestPath);
     //check if the path starts with /files/public, if not the user could be trying to access the linux file system
-    if (requestPath.startsWith("/" || "." || "*")) {
+    if (requestPath.startsWith("/" || "." || "*") || filePath.startsWith(publicUploadPath)) {
       res.status(403).sendFile(path.join(__dirname, "..", "..", "public", "403.html"));
       return;
     }
