@@ -179,7 +179,7 @@ app.use(function (req, res, next) {
 // Error handling middleware
 app.use((err, req, res, next) => {
   logger.error(err.stack, { route: req.path });
-  res.status(500).json({ error: "Something broke!" });
+  res.status(500).json({ error: "An error occured." });
 });
 
 // Start the server
