@@ -45,6 +45,7 @@
               [username, hashedPassword],
               (insertErr) => {
                 if (insertErr) {
+                  console.log(insertErr);
                   res.status(500).json({ message: 'User already exists' });
                 } else {
                   res.cookie('username', username);
