@@ -19,6 +19,7 @@ module.exports = {
     // If not authorized, return 401
     if(config.Authentication == false ){
       res.status(401).json({ message: 'Authentication failed' });
+      return;
     }
     const username = req.headers.username;
     const password = req.headers.password;
