@@ -1,5 +1,8 @@
 const path = require("path");
 const fs = require("fs");
+const mime = require("mime-types");
+const bcrypt = require('bcrypt'); // Import bcrypt
+
 const publicUploadPath = path.join(__dirname, "..", "..", "files", "public");
 
 module.exports = {
@@ -15,21 +18,39 @@ module.exports = {
    * @param {import('sqlite3').Database} db - The database connection object.
    */
   async handle(req, res, db) {
-    db.get(
-      'SELECT * FROM users WHERE username = ? AND password = ?',
-      [req.body.username, req.body.password],
-      (err, row) => {
-        if (err) {
-          console.error(err);
-          res.status(500).send('Internal server error');
-          return;
-        }
-        if (!row) {
-          res.status(401).send('Unauthorized');
+    // Authorize user (username and password in headers)
+    // If not authorized, return 401
+
+    const username = req.headers.username;
+    const password = req.headers.password;
+
+    // Retrieve the user's hashed password from the database
+    db.get('SELECT * FROM users WHERE username = ?', [username], (err, row) => {
+      if (err) {
+        console.error(err);
+        res.status(500).send('Internal server error');
+        return;
+      }
+
+      if (!row) {
+        res.status(401).send('Unauthorized');
+        return;
+      }
+
+      // Compare the provided password with the hashed password from the database
+      bcrypt.compare(password, row.password, (compareErr, result) => {
+        if (compareErr) {
+          console.error(compareErr);
+          res.status(500).send('Authentication error');
           return;
         }
 
-        // Create a directory based on the URL path
+        if (!result) {
+          res.status(401).send('Authentication failed');
+          return;
+        }
+
+        // Once authenticated, continue with directory creation logic
         const dirPath = path.join(publicUploadPath, req.params[0]);
 
         fs.mkdir(dirPath, { recursive: true }, (mkdirErr) => {
@@ -40,7 +61,7 @@ module.exports = {
 
           res.json({ message: 'Directory created successfully' });
         });
-      }
-    );
+      });
+    });
   },
 };
