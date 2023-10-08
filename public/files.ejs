@@ -458,6 +458,24 @@
         }
       }
     });
+    // Get the 'password' query parameter from the current URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const passwordParam = urlParams.get('password');
+
+    // Select all the links in your HTML that you want to modify
+    const links = document.querySelectorAll('a[href^="/files/"]');
+
+    // Loop through each link and modify the href attribute
+    links.forEach((link) => {
+      // Check if the link already has a query parameter
+      if (passwordParam) {
+        // If it does, append the 'password' query parameter and its value to the existing URL
+        link.href += `?password=${passwordParam}`;
+      } else {
+        // If it doesn't, leave the link as it is
+        link.href += '';
+      }
+    });
   </script>
 </body>
 
