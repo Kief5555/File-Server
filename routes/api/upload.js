@@ -41,12 +41,12 @@ module.exports = {
       bcrypt.compare(password, row.password, (compareErr, result) => {
         if (compareErr) {
           console.error(compareErr);
-          res.status(500).send('Authentication error');
+          res.status(500).json({ message: 'Authentication failed', success: false});
           return;
         }
 
         if (!result) {
-          res.status(401).json({ message: 'Authentication failed' });
+          res.status(401).json({ message: 'Authentication failed', success: false});
           return;
         }
 
@@ -71,11 +71,11 @@ module.exports = {
         // Handle the file upload
         upload.single('filepond')(req, res, (uploadErr) => {
           if (uploadErr) {
-            res.status(500).send('Error uploading file');
+            res.status(500).json({ message: 'File upload failed', success: false });
             return;
           }
           // File uploaded successfully
-          res.status(200).send('File uploaded successfully');
+          res.status(200).json({ message: 'File uploaded successfully', success: true});
         });
       });
     });
