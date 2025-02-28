@@ -32,11 +32,13 @@ module.exports = {
     async handle(req, res, db) {
         const requestPath = path.normalize(req.params[0]);
         const filePath = path.resolve(privateUploadPath, requestPath);
+
         // Check if requested path is a directory
-        if (requestPath.startsWith("/" || "." || "*") || !filePath.startsWith(privateUploadPath)) {
+        if (requestPath.startsWith("/") || requestPath.startsWith(".") || requestPath.startsWith("*") || !filePath.startsWith(privateUploadPath)) {
             res.status(403).sendFile(path.join(__dirname, "..", "..", "public", "403.html"));
             return;
         }
+
         const password = req.query.password;
         const stats = fs.statSync(filePath);
         if (stats.isDirectory()) {
@@ -55,7 +57,6 @@ module.exports = {
                     const mimetype = mime.lookup(filePath);
                     let fileSizeInBytes = stat.size;
                     let folderName = path.basename(privateUploadPath);
-                    //Check if file or folder and set boolean true if folder
                     let isDirectoryFile = false;
 
                     if (stat.isDirectory()) {
@@ -64,8 +65,7 @@ module.exports = {
                         isDirectoryFile = true;
                     }
 
-                    //Remove the extra / at the end of the path
-                    const folder = path.join("private", req.params[0]).replace(/\/+$/, "");
+                    const folder = path.join("private", req.params[0]).replace(/\\/g, "/");
                     fileData.push({
                         filename: file,
                         mimetype: mimetype || "unknown",

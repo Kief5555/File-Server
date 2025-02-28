@@ -31,7 +31,9 @@ module.exports = {
   async handle(req, res, db) {
     const requestPath = path.normalize(req.params[0]);
     const filePath = path.resolve(publicUploadPath, requestPath);
-    if (requestPath.startsWith("/" || "." || "*") || !filePath.startsWith(publicUploadPath)) {
+
+    // Check if requested path is a directory
+    if (requestPath.startsWith("/") || requestPath.startsWith(".") || requestPath.startsWith("*") || !filePath.startsWith(publicUploadPath)) {
       res.status(403).sendFile(path.join(__dirname, "..", "..", "public", "403.html"));
       return;
     }
@@ -58,7 +60,6 @@ module.exports = {
           const mimetype = mime.lookup(filePath);
           let fileSizeInBytes = stat.size;
           let folderName = path.basename(publicUploadPath);
-          //Check if file or folder and set boolean true if folder
           let isDirectoryFile = false;
 
           if (stat.isDirectory()) {
@@ -67,8 +68,7 @@ module.exports = {
             isDirectoryFile = true;
           }
 
-          //Remove the extra / at the end of the path
-          const folder = path.join("public", req.params[0]).replace(/\/+$/, "");
+          const folder = path.join("public", req.params[0]).replace(/\\/g, "/");
           fileData.push({
             filename: file,
             mimetype: mimetype || "unknown",
