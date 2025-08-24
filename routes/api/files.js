@@ -4,9 +4,6 @@ const mime = require("mime-types");
 
 const publicUploadPath = path.join(__dirname, "..", "..", "files", "public");
 
-require("dotenv").config();
-const hideFileNames = process.env.HIDDEN_FILES?.split(",");
-
 module.exports = {
   Name: "API - Public Files",
   Route: "/api/files/public/*",
@@ -50,11 +47,6 @@ module.exports = {
           fileSizeInBytes = "";
           folderName = folderName;
           isDirectoryFile = true;
-        }
-
-        if (hideFileNames.includes(file)) {
-          fileSizeInBytes = "";
-          folderName = folderName;
         }
 
         //Remove the extra / at the end of the path

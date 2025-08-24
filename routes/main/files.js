@@ -16,6 +16,9 @@ function formatFileSize(size) {
   return size.toFixed(2) + " " + units[unitIndex];
 }
 
+require("dotenv").config();
+const hideFileNames = process.env.HIDDEN_FILES?.split(",");
+
 module.exports = {
   Name: "Public Files",
   Route: "/files/public/*",
@@ -69,13 +72,17 @@ module.exports = {
           }
 
           const folder = path.join("public", req.params[0]).replace(/\\/g, "/");
-          fileData.push({
-            filename: file,
-            mimetype: mimetype || "unknown",
-            size: fileSizeInBytes,
-            folder: folder,
-            isDirectoryFile: isDirectoryFile,
-          });
+
+          //Hide file push if its hidden on the list.
+          if (!hideFileNames?.includes(file)) {
+            fileData.push({
+              filename: file,
+              mimetype: mimetype || "unknown",
+              size: fileSizeInBytes,
+              folder: folder,
+              isDirectoryFile: isDirectoryFile,
+            });
+          }
         });
 
         res.render("files", {
