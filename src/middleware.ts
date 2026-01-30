@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
+  'Access-Control-Allow-Headers': '*',
+};
+
 // Common file extensions that indicate the path is a file, not a directory
 const FILE_EXTENSIONS = new Set([
     // Images
@@ -32,6 +38,18 @@ function looksLikeFile(pathname: string): boolean {
 export function middleware(request: NextRequest) {
     const pathname = request.nextUrl.pathname;
 
+    // CORS for API routes - allow anywhere
+    if (pathname.startsWith('/api')) {
+        if (request.method === 'OPTIONS') {
+            return new NextResponse(null, { status: 204, headers: corsHeaders });
+        }
+        const response = NextResponse.next();
+        Object.entries(corsHeaders).forEach(([key, value]) => {
+            response.headers.set(key, value);
+        });
+        return response;
+    }
+
     // Redirect /explorer/* to /files/* - user should never see /explorer in URL
     if (pathname.startsWith('/explorer')) {
         const filesPath = pathname.replace(/^\/explorer/, '/files');
@@ -56,6 +74,7 @@ export function middleware(request: NextRequest) {
 
 export const config = {
     matcher: [
+        '/api/:path*',
         '/files/:path*',
         '/files',
         '/explorer/:path*',
