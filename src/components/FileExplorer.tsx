@@ -63,6 +63,9 @@ const formatTime = (time: number) => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
+const PREVIEW_MAX_SIZE_BYTES = 100 * 1024 * 1024; // 100MB - no quick preview for larger files
+const PREVIEW_HOVER_DELAY_MS = 450; // Delay before showing preview to avoid loading on quick hovers
+
 const VideoPreview = ({ src }: { src: string }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const progressRef = useRef<HTMLDivElement>(null);
@@ -181,7 +184,7 @@ const VideoPreview = ({ src }: { src: string }) => {
                 ref={videoRef}
                 src={src}
                 playsInline
-                preload="auto"
+                preload="metadata"
                 className="w-full h-full object-contain"
                 onTimeUpdate={handleTimeUpdate}
                 onSeeked={handleSeeked}
@@ -343,9 +346,9 @@ const ImagePreview = ({ src }: { src: string }) => {
     }
 
     return (
-        <div className="relative">
+        <div className="relative min-h-[80px]">
             {loading && (
-                <div className="absolute inset-0 bg-muted flex items-center justify-center">
+                <div className="absolute inset-0 bg-muted flex items-center justify-center min-h-[80px]">
                     <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
                 </div>
             )}
@@ -353,6 +356,8 @@ const ImagePreview = ({ src }: { src: string }) => {
                 src={src}
                 alt="preview"
                 className="w-full h-auto object-contain max-h-48"
+                loading="lazy"
+                decoding="async"
                 onLoad={() => setLoading(false)}
                 onError={() => { setError(true); setLoading(false); }}
             />
@@ -366,16 +371,18 @@ const TextPreview = ({ src }: { src: string }) => {
 
     useEffect(() => {
         setLoading(true);
-        fetch(src)
+        const ac = new AbortController();
+        fetch(src, { signal: ac.signal })
             .then(res => res.text())
             .then(text => {
                 setContent(text.slice(0, 2000)); // Limit to first 2000 chars
                 setLoading(false);
             })
-            .catch(() => {
-                setContent("Failed to load preview");
+            .catch((err) => {
+                if (err.name !== "AbortError") setContent("Failed to load preview");
                 setLoading(false);
             });
+        return () => ac.abort();
     }, [src]);
 
     if (loading) {
@@ -429,38 +436,49 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
     const [isPinned, setIsPinned] = useState(false);
     const previewRef = useRef<HTMLDivElement>(null);
     const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const showPreviewTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     const closePreview = () => {
         if (hoverTimeoutRef.current) {
             clearTimeout(hoverTimeoutRef.current);
             hoverTimeoutRef.current = null;
         }
+        if (showPreviewTimeoutRef.current) {
+            clearTimeout(showPreviewTimeoutRef.current);
+            showPreviewTimeoutRef.current = null;
+        }
         setHoveredFile(null);
         setIsPinned(false);
     };
 
     const handleFileMouseEnter = (e: React.MouseEvent, file: FileItem, isPreviewable: boolean) => {
-        // Don't change preview if pinned
         if (isPinned) return;
-        
+        if (showPreviewTimeoutRef.current) {
+            clearTimeout(showPreviewTimeoutRef.current);
+            showPreviewTimeoutRef.current = null;
+        }
         if (hoverTimeoutRef.current) {
             clearTimeout(hoverTimeoutRef.current);
+            hoverTimeoutRef.current = null;
         }
-        
-        if (isPreviewable) {
-            setPreviewPos({ x: e.clientX, y: e.clientY });
+        if (!isPreviewable) return;
+        setPreviewPos({ x: e.clientX, y: e.clientY });
+        // Delay before showing preview so we don't load media on quick hovers
+        showPreviewTimeoutRef.current = setTimeout(() => {
+            showPreviewTimeoutRef.current = null;
             setHoveredFile(file);
-        }
+        }, PREVIEW_HOVER_DELAY_MS);
     };
 
     const handleFileMouseLeave = () => {
-        // Don't close if pinned
         if (isPinned) return;
-        
-        // Small delay before closing to allow moving to preview
+        if (showPreviewTimeoutRef.current) {
+            clearTimeout(showPreviewTimeoutRef.current);
+            showPreviewTimeoutRef.current = null;
+        }
         hoverTimeoutRef.current = setTimeout(() => {
             setHoveredFile(null);
-        }, 300);
+        }, 200);
     };
 
     const handlePreviewMouseEnter = () => {
@@ -521,9 +539,8 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
         document.addEventListener('mousedown', handleClickOutside);
         return () => {
             document.removeEventListener('mousedown', handleClickOutside);
-            if (hoverTimeoutRef.current) {
-                clearTimeout(hoverTimeoutRef.current);
-            }
+            if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+            if (showPreviewTimeoutRef.current) clearTimeout(showPreviewTimeoutRef.current);
         };
     }, []);
 
@@ -1031,7 +1048,7 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
                                 }
                             };
 
-                            const isPreviewable = previewsEnabled && !file.isDirectory && (
+                            const isPreviewable = previewsEnabled && !file.isDirectory && file.size <= PREVIEW_MAX_SIZE_BYTES && (
                                 file.mimetype.startsWith("image/") ||
                                 file.mimetype.startsWith("video/") ||
                                 file.mimetype.startsWith("audio/") ||
