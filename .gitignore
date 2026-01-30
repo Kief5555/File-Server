@@ -1,9 +1,13 @@
+# .gitignore
 node_modules
-package-lock.json
-database/*
-combined.log
-error.log
-files/public/*
-files/private/*
-config/*
+.next
+legacy_backup
+database/*.sqlite
+database/*.sqlite-journal
 .env
+.env.local
+.DS_Store
+dist
+*.log
+/files/public/*
+/files/private/*
