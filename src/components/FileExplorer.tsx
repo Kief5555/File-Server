@@ -669,7 +669,7 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
         if (!fileList || fileList.length === 0) return;
 
         const file = fileList[0];
-        const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB
+        const CHUNK_SIZE = 25 * 1024 * 1024; // 25MB
         const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
         const identifier = Math.random().toString(36).substring(2) + Date.now().toString(36);
         const startTime = Date.now();
@@ -746,7 +746,7 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
             { duration: Infinity }
         );
 
-        const CONCURRENCY = 6; // parallel chunk uploads
+        const CONCURRENCY = 2; // parallel chunk uploads
         let completedBytes = 0;
 
         const uploadChunk = async (i: number) => {
