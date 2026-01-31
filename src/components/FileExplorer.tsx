@@ -689,9 +689,25 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
             return `${mins}:${secs.toString().padStart(2, '0')}`;
         };
 
+        // Rolling samples for ETA: use recent throughput instead of overall average
+        const speedSamples: { t: number; b: number }[] = [];
+        const SPEED_WINDOW_MS = 3000; // use last 3s for speed
+
         const updateToast = (toastId: string | number, bytesUploaded: number, progress: number) => {
-            const elapsed = (Date.now() - startTime) / 1000; // seconds
-            const speed = elapsed > 0 ? bytesUploaded / elapsed : 0; // bytes per second
+            const now = Date.now();
+            speedSamples.push({ t: now, b: bytesUploaded });
+            while (speedSamples.length > 1 && now - speedSamples[0].t > SPEED_WINDOW_MS) {
+                speedSamples.shift();
+            }
+            const elapsed = (now - startTime) / 1000;
+            const oldest = speedSamples[0];
+            const windowSec = speedSamples.length > 1 ? (now - oldest.t) / 1000 : 0;
+            const speed =
+                windowSec >= 0.5 && speedSamples.length > 1
+                    ? (bytesUploaded - oldest.b) / windowSec
+                    : elapsed > 0
+                      ? bytesUploaded / elapsed
+                      : 0;
             const remaining = file.size - bytesUploaded;
             const eta = speed > 0 ? remaining / speed : 0;
 
