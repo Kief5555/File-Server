@@ -11,6 +11,11 @@ if (!fs.existsSync(dbDir)) {
 const dbPath = path.join(dbDir, 'users.sqlite');
 const db = new Database(dbPath);
 
+// Reduce blocking: WAL mode allows concurrent reads; NORMAL sync is faster than FULL
+db.pragma('journal_mode = WAL');
+db.pragma('synchronous = NORMAL');
+db.pragma('busy_timeout = 5000');
+
 // Initialize Tables
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (

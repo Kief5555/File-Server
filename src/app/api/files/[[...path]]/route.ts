@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs';
+import fsp from 'fs/promises';
 import path from 'path';
+import { Readable } from 'stream';
 import { getSession } from '@/lib/auth';
 import { listFiles, getAbsPath } from '@/lib/files';
 import mime from 'mime-types';
@@ -18,8 +20,8 @@ function getPathFromUrl(url: string) {
 }
 
 // Serve file with range request support (needed for video/audio seeking)
-function serveFileWithRangeSupport(req: Request, absPath: string, mimetype: string, isDownload: boolean) {
-    const stat = fs.statSync(absPath);
+async function serveFileWithRangeSupport(req: Request, absPath: string, mimetype: string, isDownload: boolean) {
+    const stat = await fsp.stat(absPath);
     const fileSize = stat.size;
     const fileName = path.basename(absPath);
     const disposition = isDownload ? 'attachment' : 'inline';
@@ -69,10 +71,11 @@ function serveFileWithRangeSupport(req: Request, absPath: string, mimetype: stri
             });
         });
     }
-    
-    // No range header - serve the whole file
-    const fileBuffer = fs.readFileSync(absPath);
-    return new NextResponse(fileBuffer, {
+
+    // No range header - stream the file (avoids blocking and high CPU/memory)
+    const nodeStream = fs.createReadStream(absPath);
+    const webStream = Readable.toWeb(nodeStream) as ReadableStream<Uint8Array>;
+    return new NextResponse(webStream, {
         headers: {
             'Content-Type': mimetype,
             'Content-Length': fileSize.toString(),
@@ -112,7 +115,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ path?: s
             if (absPath && fs.existsSync(absPath)) {
                 const mimetype = mime.lookup(absPath) || 'application/octet-stream';
                 const isDownload = url.searchParams.get('download') === '1';
-                return serveFileWithRangeSupport(req, absPath, mimetype, isDownload);
+                return await serveFileWithRangeSupport(req, absPath, mimetype, isDownload);
             }
         }
 

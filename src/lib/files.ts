@@ -1,4 +1,5 @@
 import fs from 'fs';
+import fsp from 'fs/promises';
 import path from 'path';
 import mime from 'mime-types';
 import db, { getSetting } from './db';
@@ -67,24 +68,28 @@ export async function listFiles(pathSegments: string[], session: any, password?:
         throw new Error("Access denied");
     }
 
-    if (!fs.existsSync(absPath)) {
+    let stat: fs.Stats;
+    try {
+        stat = await fsp.stat(absPath);
+    } catch {
         throw new Error("Not found");
     }
 
-    const stat = fs.statSync(absPath);
-
     if (stat.isDirectory()) {
-        const files = fs.readdirSync(absPath).map(file => {
-            const filePath = path.join(absPath, file);
-            const fileStat = fs.statSync(filePath);
-            return {
-                name: file,
-                isDirectory: fileStat.isDirectory(),
-                size: fileStat.size,
-                mimetype: mime.lookup(file) || 'application/octet-stream',
-                modified: fileStat.mtime.toISOString(),
-            };
-        });
+        const names = await fsp.readdir(absPath);
+        const files = await Promise.all(
+            names.map(async (file) => {
+                const filePath = path.join(absPath, file);
+                const fileStat = await fsp.stat(filePath);
+                return {
+                    name: file,
+                    isDirectory: fileStat.isDirectory(),
+                    size: fileStat.size,
+                    mimetype: mime.lookup(file) || 'application/octet-stream',
+                    modified: fileStat.mtime.toISOString(),
+                };
+            })
+        );
         return { path: requestedPath, files };
     } else {
         throw new Error("Not a directory");

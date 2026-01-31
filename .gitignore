@@ -2,8 +2,7 @@
 node_modules
 .next
 legacy_backup
-database/*.sqlite
-database/*.sqlite-journal
+database/*
 .env
 .env.local
 .DS_Store

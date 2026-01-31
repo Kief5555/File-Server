@@ -133,9 +133,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ path?: s
 
     const stats = fs.statSync(absPath);
 
-    // If it's a directory, rewrite to show UI (fallback - middleware should handle this)
+    // If it's a directory (e.g. folder named "file.pdf"), redirect to explorer (rewrite is only allowed in middleware)
     if (stats.isDirectory()) {
-        return NextResponse.redirect(new URL(`/files/${pathSegments.join('/')}`, req.url));
+        const explorerPath = `/explorer/${pathSegments.join('/')}`;
+        return NextResponse.redirect(new URL(explorerPath, req.url));
     }
 
     // Serve the file with range support for video/audio seeking

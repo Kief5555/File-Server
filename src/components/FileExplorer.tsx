@@ -500,20 +500,28 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
         // Only pin/unpin if clicking directly on the preview container, not on media inside
         // Check if the click target is a media element or inside a media container
         const target = e.target as HTMLElement;
-        const isMediaElement = target.tagName === 'VIDEO' || 
-                               target.tagName === 'AUDIO' || 
-                               target.closest('video') || 
+        const isMediaElement = target.tagName === 'VIDEO' ||
+                               target.tagName === 'AUDIO' ||
+                               target.closest('video') ||
                                target.closest('audio') ||
                                target.closest('[data-media-controls]');
-        
+
         if (isMediaElement) {
             // Don't pin when clicking on media - just stop propagation
             e.stopPropagation();
             return;
         }
-        
-        // Clicking on the preview container toggles pin
+
         e.stopPropagation();
+
+        // When preview is not pinned, first click = open/download the file (preview was overlapping the row)
+        if (!isPinned && hoveredFile) {
+            closePreview();
+            window.location.href = `/files/${currentPath}/${encodeURIComponent(hoveredFile.name)}`;
+            return;
+        }
+
+        // Clicking on the preview container when pinned toggles pin
         setIsPinned(!isPinned);
     };
 
