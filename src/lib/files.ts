@@ -5,6 +5,20 @@ import mime from 'mime-types';
 import db, { getSetting } from './db';
 
 const filesRoot = path.join(process.cwd(), 'files');
+const resolvedFilesRoot = path.resolve(filesRoot);
+
+/** Returns true if relativePath has no path traversal and resolves under filesRoot. */
+export function isPathUnderRoot(relativePath: string): boolean {
+    if (typeof relativePath !== 'string' || relativePath.includes('..')) return false;
+    const resolved = path.resolve(filesRoot, relativePath);
+    return resolved === resolvedFilesRoot || resolved.startsWith(resolvedFilesRoot + path.sep);
+}
+
+/** Resolved absolute path under filesRoot, or null if invalid (path traversal). */
+export function getResolvedAbsPath(relativePath: string): string | null {
+    if (!isPathUnderRoot(relativePath)) return null;
+    return path.resolve(filesRoot, relativePath);
+}
 
 // Ensure filesRoot includes public/private
 ['public', 'private'].forEach(dir => {
@@ -62,9 +76,8 @@ export async function listFiles(pathSegments: string[], session: any, password?:
         if (!session && requestedPath !== "") throw new Error("Unauthorized");
     }
 
-    const absPath = path.join(filesRoot, requestedPath);
-
-    if (!absPath.startsWith(filesRoot)) {
+    const absPath = path.resolve(filesRoot, requestedPath);
+    if (absPath !== resolvedFilesRoot && !absPath.startsWith(resolvedFilesRoot + path.sep)) {
         throw new Error("Access denied");
     }
 
@@ -98,8 +111,9 @@ export async function listFiles(pathSegments: string[], session: any, password?:
 
 export function getAbsPath(pathSegments: string[]) {
     const requestedPath = pathSegments.join('/');
-    const absPath = path.join(filesRoot, requestedPath);
-    if (!absPath.startsWith(filesRoot) || requestedPath.includes('..')) {
+    if (requestedPath.includes('..')) return null;
+    const absPath = path.resolve(filesRoot, requestedPath);
+    if (absPath !== resolvedFilesRoot && !absPath.startsWith(resolvedFilesRoot + path.sep)) {
         return null;
     }
     return absPath;

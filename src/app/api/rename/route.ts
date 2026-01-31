@@ -2,8 +2,7 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import { getSession } from '@/lib/auth';
-
-const filesRoot = path.join(process.cwd(), 'files');
+import { getResolvedAbsPath } from '@/lib/files';
 
 export async function POST(req: Request) {
     const session = await getSession();
@@ -11,19 +10,25 @@ export async function POST(req: Request) {
 
     try {
         const { oldPath, newName } = await req.json();
-        if (!oldPath || !newName || oldPath.includes('..') || newName.includes('/') || newName.includes('..')) {
+        if (!oldPath || !newName || typeof oldPath !== 'string' || typeof newName !== 'string') {
             return NextResponse.json({ message: "Invalid input" }, { status: 400 });
         }
-
-        const fullOldPath = path.join(filesRoot, oldPath);
-        if (!fullOldPath.startsWith(filesRoot)) return NextResponse.json({ message: "Access denied" }, { status: 403 });
+        if (oldPath.includes('..') || newName.includes('/') || newName.includes('\\') || newName.includes('..')) {
+            return NextResponse.json({ message: "Invalid input" }, { status: 400 });
+        }
+        const normalizedOld = oldPath.replace(/^\/+/, '').replace(/\\/g, '/');
+        const fullOldPath = getResolvedAbsPath(normalizedOld);
+        if (!fullOldPath) return NextResponse.json({ message: "Invalid path" }, { status: 400 });
 
         if (!fs.existsSync(fullOldPath)) return NextResponse.json({ message: "Not found" }, { status: 404 });
 
         const dir = path.dirname(fullOldPath);
         const fullNewPath = path.join(dir, newName);
-
-        if (!fullNewPath.startsWith(filesRoot)) return NextResponse.json({ message: "Access denied" }, { status: 403 });
+        const filesRoot = path.join(process.cwd(), 'files');
+        const resolvedRoot = path.resolve(filesRoot);
+        if (fullNewPath !== resolvedRoot && !fullNewPath.startsWith(resolvedRoot + path.sep)) {
+            return NextResponse.json({ message: "Access denied" }, { status: 403 });
+        }
 
         if (fs.existsSync(fullNewPath)) return NextResponse.json({ message: "Already exists" }, { status: 409 });
 

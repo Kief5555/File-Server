@@ -2,8 +2,7 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import { getSession } from '@/lib/auth';
-
-const filesRoot = path.join(process.cwd(), 'files');
+import { getResolvedAbsPath } from '@/lib/files';
 
 export async function POST(req: Request) {
     const session = await getSession();
@@ -11,10 +10,10 @@ export async function POST(req: Request) {
 
     try {
         const { path: targetPath } = await req.json();
-        if (!targetPath || targetPath.includes('..')) return NextResponse.json({ message: "Invalid path" }, { status: 400 });
-
-        const fullPath = path.join(filesRoot, targetPath);
-        if (!fullPath.startsWith(filesRoot)) return NextResponse.json({ message: "Access denied" }, { status: 403 });
+        if (!targetPath || typeof targetPath !== 'string') return NextResponse.json({ message: "Invalid path" }, { status: 400 });
+        const normalized = targetPath.replace(/^\/+/, '').replace(/\\/g, '/');
+        const fullPath = getResolvedAbsPath(normalized);
+        if (!fullPath) return NextResponse.json({ message: "Invalid path" }, { status: 400 });
 
         if (!fs.existsSync(fullPath)) return NextResponse.json({ message: "Not found" }, { status: 404 });
 

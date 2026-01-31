@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { isPathUnderRoot } from '@/lib/files';
 import crypto from 'crypto';
 
 // Generate a short random URL-safe ID
@@ -14,7 +15,14 @@ export async function POST(req: Request) {
 
     try {
         const { path: filePath, password, expiresIn } = await req.json();
-        
+        if (!filePath || typeof filePath !== 'string') {
+            return NextResponse.json({ message: "Invalid path" }, { status: 400 });
+        }
+        const normalized = filePath.replace(/^\/+/, '').replace(/\\/g, '/');
+        if (!isPathUnderRoot(normalized) || (!normalized.startsWith('public/') && normalized !== 'public' && !normalized.startsWith('private/') && normalized !== 'private')) {
+            return NextResponse.json({ message: "Invalid path" }, { status: 400 });
+        }
+
         // Generate a short, URL-safe ID
         const id = generateShortId();
         
@@ -28,7 +36,7 @@ export async function POST(req: Request) {
 
         db.prepare('INSERT INTO shares (id, file_path, password, created_by, expires_at) VALUES (?, ?, ?, ?, ?)').run(
             id, 
-            filePath, 
+            normalized, 
             password || null,
             session.id,
             expiresAt

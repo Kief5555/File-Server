@@ -24,14 +24,19 @@ export async function POST(req: Request) {
         const chunkIndex = parseInt(formData.get('chunkIndex') as string);
         const totalChunks = parseInt(formData.get('totalChunks') as string);
         const identifier = formData.get('identifier') as string;
-        const fileName = formData.get('fileName') as string || file?.name;
+        const rawFileName = formData.get('fileName') as string || file?.name || 'file';
+        const fileName = path.basename(String(rawFileName)) || 'file';
+        if (fileName === '.' || fileName === '..' || fileName.includes('..')) return NextResponse.json({ message: "Invalid file name" }, { status: 400 });
 
         if (!file && isNaN(chunkIndex)) return NextResponse.json({ message: "No file" }, { status: 400 });
 
         if (targetPathQuery.includes('..')) return NextResponse.json({ message: "Invalid path" }, { status: 403 });
 
-        const targetDir = path.join(filesRoot, targetPathQuery);
-        if (!targetDir.startsWith(filesRoot)) return NextResponse.json({ message: "Access denied" }, { status: 403 });
+        const targetDir = path.resolve(filesRoot, targetPathQuery);
+        const resolvedRoot = path.resolve(filesRoot);
+        if (targetDir !== resolvedRoot && !targetDir.startsWith(resolvedRoot + path.sep)) {
+            return NextResponse.json({ message: "Access denied" }, { status: 403 });
+        }
 
         if (!fs.existsSync(targetDir)) {
             return NextResponse.json({ message: "Target directory not found" }, { status: 404 });

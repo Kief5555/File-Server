@@ -3,8 +3,7 @@ import db from '@/lib/db';
 import fs from 'fs';
 import path from 'path';
 import mime from 'mime-types';
-
-const filesRoot = path.join(process.cwd(), 'files');
+import { getResolvedAbsPath } from '@/lib/files';
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
@@ -19,7 +18,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    const fullPath = path.join(filesRoot, share.file_path);
+    const relativePath = (share.file_path || '').replace(/\\/g, '/');
+    const fullPath = getResolvedAbsPath(relativePath);
+    if (!fullPath) return NextResponse.json({ message: "Invalid path" }, { status: 403 });
 
     if (!fs.existsSync(fullPath)) return NextResponse.json({ message: "File not found" }, { status: 404 });
 
