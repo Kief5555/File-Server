@@ -5,6 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
   'Access-Control-Allow-Headers': '*',
+  'Access-Control-Allow-Credentials': 'true',
 };
 
 // Common file extensions that indicate the path is a file, not a directory
@@ -43,27 +44,7 @@ export function middleware(request: NextRequest) {
         if (request.method === 'OPTIONS') {
             return new NextResponse(null, { status: 204, headers: corsHeaders });
         }
-        // Strip trailing slash via rewrite so Next.js doesn't send 308 (CORS blocks redirect)
-        if (pathname.length > 4 && pathname.endsWith('/')) {
-            const url = request.nextUrl.clone();
-            url.pathname = pathname.slice(0, -1);
-            const response = NextResponse.rewrite(url);
-            Object.entries(corsHeaders).forEach(([key, value]) => {
-                response.headers.set(key, value);
-            });
-            return response;
-        }
-        const response = NextResponse.next();
-        Object.entries(corsHeaders).forEach(([key, value]) => {
-            response.headers.set(key, value);
-        });
-        return response;
-    }
-
-    // Redirect /explorer/* to /files/* - user should never see /explorer in URL
-    if (pathname.startsWith('/explorer')) {
-        const filesPath = pathname.replace(/^\/explorer/, '/files');
-        return NextResponse.redirect(new URL(filesPath || '/files/public', request.url));
+        return NextResponse.next();
     }
 
     // Handle /files/* paths
