@@ -749,6 +749,9 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
         const CONCURRENCY = 2; // parallel chunk uploads
         let completedBytes = 0;
 
+        const CHUNK_RETRIES = 3;
+        const RETRY_DELAY_MS = 2000;
+
         const uploadChunk = async (i: number) => {
             const start = i * CHUNK_SIZE;
             const end = Math.min(file.size, start + CHUNK_SIZE);
@@ -761,15 +764,34 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
             formData.append("identifier", identifier);
             formData.append("fileName", file.name);
 
-            const res = await fetch(`/api/upload?path=${currentPath}`, {
-                method: "POST",
-                body: formData,
-            });
-
-            if (!res.ok) throw new Error(`Failed to upload chunk ${i}`);
-            completedBytes += end - start;
-            const progress = (completedBytes / file.size) * 100;
-            updateToast(toastId, completedBytes, progress);
+            let lastErr: Error | null = null;
+            for (let attempt = 1; attempt <= CHUNK_RETRIES; attempt++) {
+                try {
+                    const res = await fetch(`/api/upload?path=${currentPath}`, {
+                        method: "POST",
+                        body: formData,
+                    });
+                    if (!res.ok) {
+                        if (res.status >= 500 && attempt < CHUNK_RETRIES) {
+                            await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+                            continue;
+                        }
+                        throw new Error(`Failed to upload chunk ${i}`);
+                    }
+                    completedBytes += end - start;
+                    const progress = (completedBytes / file.size) * 100;
+                    updateToast(toastId, completedBytes, progress);
+                    return;
+                } catch (err) {
+                    lastErr = err instanceof Error ? err : new Error(String(err));
+                    if (attempt < CHUNK_RETRIES) {
+                        await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+                    } else {
+                        throw lastErr;
+                    }
+                }
+            }
+            if (lastErr) throw lastErr;
         };
 
         try {
