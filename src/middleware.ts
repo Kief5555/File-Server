@@ -41,10 +41,17 @@ export function middleware(request: NextRequest) {
 
     // CORS for API routes - allow anywhere
     if (pathname.startsWith('/api')) {
+        //Continue and just add CORS headers
         if (request.method === 'OPTIONS') {
-            return new NextResponse(null, { status: 204, headers: corsHeaders });
+            return new NextResponse(null, {
+                headers: corsHeaders,
+            });
         }
-        return NextResponse.next();
+        const response = NextResponse.next();
+        Object.entries(corsHeaders).forEach(([key, value]) => {
+            response.headers.set(key, value);
+        });
+        return response;
     }
 
     // Handle /files/* paths
