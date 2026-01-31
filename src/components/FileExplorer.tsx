@@ -1109,7 +1109,8 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
                                 file.mimetype.startsWith("audio/") ||
                                 file.mimetype.includes("text") ||
                                 file.name.toLowerCase().endsWith('.mov') ||
-                                file.name.toLowerCase().endsWith('.mp4')
+                                file.name.toLowerCase().endsWith('.mp4') ||
+                                file.name.toLowerCase().endsWith('.pdf')
                             );
 
                             return (

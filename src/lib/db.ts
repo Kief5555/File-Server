@@ -52,6 +52,12 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   );
+  
+  CREATE TABLE IF NOT EXISTS folder_sizes (
+    path TEXT PRIMARY KEY,
+    size INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
 `);
 
 // Add columns if they don't exist (migration for existing databases)
@@ -93,6 +99,26 @@ export function getSetting(key: string): string | null {
 
 export function setSetting(key: string, value: string): void {
   db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(key, value);
+}
+
+// Folder size cache (relative path under files root -> total recursive size in bytes)
+export function getCachedFolderSize(relativePath: string): number | null {
+  const row = db.prepare('SELECT size FROM folder_sizes WHERE path = ?').get(relativePath) as { size: number } | undefined;
+  return row != null ? row.size : null;
+}
+
+export function setCachedFolderSize(relativePath: string, size: number): void {
+  const updatedAt = Math.floor(Date.now() / 1000);
+  db.prepare('INSERT OR REPLACE INTO folder_sizes (path, size, updated_at) VALUES (?, ?, ?)').run(relativePath, size, updatedAt);
+}
+
+/** Invalidate folder size cache for this path and all ancestor directories. Call when files change under a path. */
+export function invalidateFolderSizeCache(relativePath: string): void {
+  const parts = relativePath.replace(/^\/+/, '').replace(/\\/g, '/').split('/').filter(Boolean);
+  const stmt = db.prepare('DELETE FROM folder_sizes WHERE path = ?');
+  for (let i = 1; i <= parts.length; i++) {
+    stmt.run(parts.slice(0, i).join('/'));
+  }
 }
 
 export default db;

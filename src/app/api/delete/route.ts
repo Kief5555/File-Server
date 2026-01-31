@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import { getSession } from '@/lib/auth';
-import { getResolvedAbsPath } from '@/lib/files';
+import { getResolvedAbsPath, invalidateFolderSizeCache } from '@/lib/files';
 
 export async function POST(req: Request) {
     const session = await getSession();
@@ -22,8 +22,9 @@ export async function POST(req: Request) {
             fs.rmSync(fullPath, { recursive: true, force: true });
         } else {
             fs.unlinkSync(fullPath);
-        } // Using sync methods in serverless/lambdas is generally acceptable for FS if not high scale, but async preferred. 
-        // Next.js App Router API routes run in Node environment by default so sync works.
+        }
+        const parentPath = path.posix.dirname(normalized);
+        if (parentPath && parentPath !== '.') invalidateFolderSizeCache(parentPath);
 
         return NextResponse.json({ message: "Deleted" });
     } catch (e) {

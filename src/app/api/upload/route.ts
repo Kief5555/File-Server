@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import { getSession } from '@/lib/auth';
+import { invalidateFolderSizeCache } from '@/lib/files';
 
 const filesRoot = path.join(process.cwd(), 'files');
 const tempRoot = path.join(filesRoot, '.temp-uploads');
@@ -73,6 +74,7 @@ export async function POST(req: Request) {
                 }
                 // Clean up temp dir
                 fs.rmdirSync(chunkDir);
+                invalidateFolderSizeCache(targetPathQuery);
                 return NextResponse.json({ message: "Uploaded and merged" });
             }
 
@@ -82,7 +84,7 @@ export async function POST(req: Request) {
         // Handle standard upload (fallback)
         const buffer = Buffer.from(await file.arrayBuffer());
         fs.writeFileSync(filePath, buffer);
-
+        invalidateFolderSizeCache(targetPathQuery);
         return NextResponse.json({ message: "Uploaded" });
     } catch (e) {
         console.error("Upload error:", e);

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import { getSession } from '@/lib/auth';
-import { getResolvedAbsPath } from '@/lib/files';
+import { getResolvedAbsPath, invalidateFolderSizeCache } from '@/lib/files';
 
 export async function POST(req: Request) {
     const session = await getSession();
@@ -33,6 +33,8 @@ export async function POST(req: Request) {
         if (fs.existsSync(fullNewPath)) return NextResponse.json({ message: "Already exists" }, { status: 409 });
 
         fs.renameSync(fullOldPath, fullNewPath);
+        const parentPath = path.posix.dirname(normalizedOld);
+        if (parentPath && parentPath !== '.') invalidateFolderSizeCache(parentPath);
         return NextResponse.json({ message: "Renamed" });
     } catch (e) {
         return NextResponse.json({ message: "Error" }, { status: 500 });

@@ -2,7 +2,9 @@ import fs from 'fs';
 import fsp from 'fs/promises';
 import path from 'path';
 import mime from 'mime-types';
-import db, { getSetting } from './db';
+import db, { getSetting, getCachedFolderSize, setCachedFolderSize, invalidateFolderSizeCache } from './db';
+
+export { invalidateFolderSizeCache };
 
 const filesRoot = path.join(process.cwd(), 'files');
 const resolvedFilesRoot = path.resolve(filesRoot);
@@ -33,6 +35,32 @@ export interface FileItem {
     size: number;
     mimetype: string;
     modified: string;
+}
+
+/** Recursively compute total size of a directory (files only). */
+async function getDirectorySizeRecursive(absPath: string): Promise<number> {
+    const names = await fsp.readdir(absPath);
+    let total = 0;
+    for (const name of names) {
+        const entryPath = path.join(absPath, name);
+        const stat = await fsp.stat(entryPath);
+        if (stat.isDirectory()) {
+            total += await getDirectorySizeRecursive(entryPath);
+        } else {
+            total += stat.size;
+        }
+    }
+    return total;
+}
+
+/** Get folder size from cache or compute and cache it. Relative path is under files root. */
+async function getFolderSizeCached(relativePath: string): Promise<number> {
+    const cached = getCachedFolderSize(relativePath);
+    if (cached !== null) return cached;
+    const absPath = path.resolve(filesRoot, relativePath);
+    const size = await getDirectorySizeRecursive(absPath);
+    setCachedFolderSize(relativePath, size);
+    return size;
 }
 
 export async function listFiles(pathSegments: string[], session: any, password?: string | null) {
@@ -94,10 +122,14 @@ export async function listFiles(pathSegments: string[], session: any, password?:
             names.map(async (file) => {
                 const filePath = path.join(absPath, file);
                 const fileStat = await fsp.stat(filePath);
+                const relPath = requestedPath ? `${requestedPath}/${file}` : file;
+                const size = fileStat.isDirectory()
+                    ? await getFolderSizeCached(relPath)
+                    : fileStat.size;
                 return {
                     name: file,
                     isDirectory: fileStat.isDirectory(),
-                    size: fileStat.size,
+                    size,
                     mimetype: mime.lookup(file) || 'application/octet-stream',
                     modified: fileStat.mtime.toISOString(),
                 };
