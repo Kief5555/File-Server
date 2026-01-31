@@ -41,11 +41,20 @@ export function middleware(request: NextRequest) {
 
     // CORS for API routes - allow anywhere
     if (pathname.startsWith('/api')) {
-        //Continue and just add CORS headers
         if (request.method === 'OPTIONS') {
             return new NextResponse(null, {
                 headers: corsHeaders,
             });
+        }
+        // Rewrite trailing slash so Next.js doesn't send 308 (CORS blocks that redirect)
+        if (pathname.length > 4 && pathname.endsWith('/')) {
+            const url = request.nextUrl.clone();
+            url.pathname = pathname.slice(0, -1);
+            const response = NextResponse.rewrite(url);
+            Object.entries(corsHeaders).forEach(([key, value]) => {
+                response.headers.set(key, value);
+            });
+            return response;
         }
         const response = NextResponse.next();
         Object.entries(corsHeaders).forEach(([key, value]) => {
