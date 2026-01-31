@@ -2,8 +2,11 @@ import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import fs from 'fs';
 import path from 'path';
+import { Readable } from 'stream';
 import mime from 'mime-types';
 import { getResolvedAbsPath } from '@/lib/files';
+
+const MAX_BUFFER_SIZE = 2 * 1024 * 1024 * 1024; // 2 GiB
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
@@ -24,22 +27,28 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
     if (!fs.existsSync(fullPath)) return NextResponse.json({ message: "File not found" }, { status: 404 });
 
-    const fileBuffer = fs.readFileSync(fullPath);
     const mimetype = mime.lookup(fullPath) || 'application/octet-stream';
     const filename = path.basename(fullPath);
+    const stat = fs.statSync(fullPath);
+    const fileSize = stat.size;
 
+    if (fileSize > MAX_BUFFER_SIZE) {
+        const nodeStream = fs.createReadStream(fullPath);
+        const webStream = Readable.toWeb(nodeStream) as ReadableStream<Uint8Array>;
+        return new NextResponse(webStream, {
+            headers: {
+                'Content-Type': mimetype,
+                'Content-Disposition': `attachment; filename="${filename}"`,
+                'Content-Length': fileSize.toString()
+            }
+        });
+    }
+
+    const fileBuffer = fs.readFileSync(fullPath);
     return new NextResponse(fileBuffer, {
         headers: {
             'Content-Type': mimetype,
             'Content-Disposition': `attachment; filename="${filename}"`
         }
     });
-
-    // Note: Streaming is better for large files.
-    // Next.js: `return new NextResponse(fs.createReadStream(fullPath) ...)`
-    // But `NextResponse` body expects BodyInit which includes ReadableStream.
-    // `fs.createReadStream` is a node stream. We need to convert or use `stream-to-web`?
-    // Actually, `new Response(readableStream)` works. 
-    // For now, buffer is fine for small files, but "chunked upload" implies potentially large files. 
-    // Optimization: Use `node:stream/web` or similar if needed later.
 }
