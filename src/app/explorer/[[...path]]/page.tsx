@@ -67,10 +67,10 @@ export default async function ExplorerPage(props: { params: Promise<{ path?: str
 
     return (
         <div className="flex h-screen flex-col bg-background">
-            <header className="flex h-16 items-center justify-between border-b px-6 bg-card">
-                <div className="flex items-center gap-2">
+            <header className="flex h-12 sm:h-16 items-center justify-between border-b px-3 sm:px-6 bg-card">
+                <div className="flex items-center gap-2 min-w-0">
                     <Link href="/files/public">
-                        <h1 className="text-xl font-bold hover:text-primary transition-colors cursor-pointer">File Server</h1>
+                        <h1 className="text-base sm:text-xl font-bold hover:text-primary transition-colors cursor-pointer truncate">File Server</h1>
                     </Link>
                 </div>
                 <div className="flex items-center gap-2 sm:gap-4">
@@ -94,7 +94,7 @@ export default async function ExplorerPage(props: { params: Promise<{ path?: str
                     )}
                 </div>
             </header>
-            <main className="flex-1 overflow-hidden p-6">
+            <main className="flex-1 min-h-0 overflow-auto p-3 sm:p-6">
                 <FileExplorer
                     initialPath={pathSegments.join('/')}
                     initialFiles={error ? [] : initialFileData.files}

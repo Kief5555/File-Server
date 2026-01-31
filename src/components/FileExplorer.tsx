@@ -63,7 +63,7 @@ const formatTime = (time: number) => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
-const PREVIEW_MAX_SIZE_BYTES = 100 * 1024 * 1024; // 100MB - no quick preview for larger files
+const PREVIEW_MAX_SIZE_BYTES = 200 * 1024 * 1024; 
 const PREVIEW_HOVER_DELAY_MS = 450; // Delay before showing preview to avoid loading on quick hovers
 
 const VideoPreview = ({ src }: { src: string }) => {
@@ -428,7 +428,10 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
     const [fileToShare, setFileToShare] = useState<FileItem | null>(null);
     const [sharePassword, setSharePassword] = useState("");
     const [shareLink, setShareLink] = useState("");
+    const [shareId, setShareId] = useState<string | null>(null);
     const [isSharing, setIsSharing] = useState(false);
+    const [isLoadingShare, setIsLoadingShare] = useState(false);
+    const [isRevoking, setIsRevoking] = useState(false);
 
     // Preview State - simplified: click to pin, click elsewhere to close
     const [hoveredFile, setHoveredFile] = useState<FileItem | null>(null);
@@ -461,7 +464,10 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
             clearTimeout(hoverTimeoutRef.current);
             hoverTimeoutRef.current = null;
         }
-        if (!isPreviewable) return;
+        if (!isPreviewable) {
+            setHoveredFile(null);
+            return;
+        }
         setPreviewPos({ x: e.clientX, y: e.clientY });
         // Delay before showing preview so we don't load media on quick hovers
         showPreviewTimeoutRef.current = setTimeout(() => {
@@ -824,6 +830,7 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
             if (!res.ok) throw new Error("Share failed");
             const data = await res.json();
             setShareLink(`${window.location.origin}${data.link}`);
+            setShareId(data.id ?? null);
         } catch (error) {
             toast.error("Failed to create share link");
         } finally {
@@ -836,70 +843,109 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
         toast.success("Link copied to clipboard");
     };
 
-    const openShareDialog = (file: FileItem) => {
+    const openShareDialog = async (file: FileItem) => {
         setFileToShare(file);
         setSharePassword("");
         setShareLink("");
+        setShareId(null);
         setShareDialogOpen(true);
+        setIsLoadingShare(true);
+        if (!isLoggedIn) {
+            setIsLoadingShare(false);
+            return;
+        }
+        try {
+            const res = await fetch("/api/share");
+            if (res.ok) {
+                const shares = await res.json() as { id: string; file_path: string }[];
+                const filePath = `${currentPath}/${file.name}`.replace(/^\/+/, "").replace(/\\/g, "/");
+                const existing = shares.find((s: { file_path: string }) => s.file_path === filePath);
+                if (existing) {
+                    setShareLink(`${typeof window !== "undefined" ? window.location.origin : ""}/u/${existing.id}`);
+                    setShareId(existing.id);
+                }
+            }
+        } catch {
+            // ignore
+        } finally {
+            setIsLoadingShare(false);
+        }
     };
 
-    // Helper to get icon - minimal style
+    const handleRevokeShare = async () => {
+        if (!shareId) return;
+        setIsRevoking(true);
+        try {
+            const res = await fetch("/api/share", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: shareId }) });
+            if (!res.ok) throw new Error("Revoke failed");
+            setShareLink("");
+            setShareId(null);
+            toast.success("Share link revoked");
+        } catch {
+            toast.error("Failed to revoke share link");
+        } finally {
+            setIsRevoking(false);
+        }
+    };
+
+    // Helper to get icon - minimal style, smaller on mobile
     const getFileIcon = (mimetype: string) => {
-        if (mimetype.startsWith("image/")) return <ImageIcon className="h-10 w-10 text-muted-foreground" />;
-        if (mimetype.startsWith("video/")) return <Film className="h-10 w-10 text-muted-foreground" />;
-        if (mimetype.startsWith("audio/")) return <Music className="h-10 w-10 text-muted-foreground" />;
-        return <FileText className="h-10 w-10 text-muted-foreground" />;
+        const iconClass = "h-8 w-8 sm:h-10 sm:w-10 text-muted-foreground";
+        if (mimetype.startsWith("image/")) return <ImageIcon className={iconClass} />;
+        if (mimetype.startsWith("video/")) return <Film className={iconClass} />;
+        if (mimetype.startsWith("audio/")) return <Music className={iconClass} />;
+        return <FileText className={iconClass} />;
     };
 
     return (
         <>
-            <div className="flex flex-col h-full gap-4">
-                {/* Toolbar */}
-                <div className="flex flex-col gap-3 bg-card p-4 rounded-lg border shadow-sm">
+            <div className="flex flex-col gap-2 sm:gap-4 md:h-full">
+                {/* Toolbar - compact on mobile */}
+                <div className="flex flex-col gap-2 sm:gap-3 bg-card p-2 sm:p-4 rounded-lg border shadow-sm">
                     {/* Top row - Navigation and actions */}
-                    <div className="flex flex-col sm:flex-row gap-3 justify-between items-start sm:items-center">
-                        <div className="flex items-center gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 justify-between items-start sm:items-center">
+                        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                             {/* Back Button */}
                             {isAtRoot ? (
-                                <Button variant="ghost" disabled className="opacity-50">
-                                    <ArrowUp className="h-4 w-4" />
+                                <Button variant="ghost" size="icon" disabled className="opacity-50 h-8 w-8 sm:h-9 sm:w-9 shrink-0">
+                                    <ArrowUp className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                 </Button>
                             ) : (
                                 <Link href={`/files/${currentPath.split('/').slice(0, -1).join('/') || 'public'}`} passHref>
-                                    <Button variant="ghost">
-                                        <ArrowUp className="h-4 w-4" />
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-9 sm:w-9 shrink-0">
+                                        <ArrowUp className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                     </Button>
                                 </Link>
                             )}
-                            <div className="flex items-center gap-1 text-sm text-muted-foreground bg-muted px-3 py-1.5 rounded-md">
-                                <span className="font-semibold text-foreground">/{currentPath}</span>
+                            <div className="flex items-center gap-1 text-xs sm:text-sm text-muted-foreground bg-muted px-2 py-1 sm:px-3 sm:py-1.5 rounded-md min-w-0">
+                                <span className="font-semibold text-foreground truncate">/{currentPath}</span>
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                             {isLoggedIn && (
                                 <div className="flex items-center border rounded-md overflow-hidden">
                                     <button
                                         onClick={() => handleRootSwitch("public")}
-                                        className={cn("px-3 py-1.5 text-sm", currentPath.startsWith("public") ? "bg-primary text-primary-foreground" : "hover:bg-muted")}
+                                        className={cn("px-2 py-1 text-xs sm:px-3 sm:py-1.5 sm:text-sm", currentPath.startsWith("public") ? "bg-primary text-primary-foreground" : "hover:bg-muted")}
                                     >
                                         Public
                                     </button>
                                     <button
                                         onClick={() => handleRootSwitch("private")}
-                                        className={cn("px-3 py-1.5 text-sm flex items-center gap-1", currentPath.startsWith("private") ? "bg-primary text-primary-foreground" : "hover:bg-muted")}
+                                        className={cn("px-2 py-1 text-xs sm:px-3 sm:py-1.5 sm:text-sm flex items-center gap-0.5 sm:gap-1", currentPath.startsWith("private") ? "bg-primary text-primary-foreground" : "hover:bg-muted")}
                                     >
-                                        <Lock className="h-3 w-3" /> Private
+                                        <Lock className="h-2.5 w-2.5 sm:h-3 sm:w-3" /> Private
                                     </button>
                                 </div>
                             )}
 
                             <div className="flex items-center border rounded-md overflow-hidden">
-                                <Button variant={viewMode === "grid" ? "secondary" : "ghost"} size="icon" className="rounded-none" onClick={() => setViewMode("grid")}>
-                                    <Grid className="h-4 w-4" />
+                                <Button variant={viewMode === "grid" ? "secondary" : "ghost"} size="icon" className="rounded-none h-8 w-8 sm:h-9 sm:w-9" onClick={() => setViewMode("grid")}>
+                                    <Grid className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                 </Button>
-                                <Button variant={viewMode === "list" ? "secondary" : "ghost"} size="icon" className="rounded-none" onClick={() => setViewMode("list")}>
-                                    <ListIcon className="h-4 w-4" />
+                                <Button variant={viewMode === "list" ? "secondary" : "ghost"} size="icon" className="rounded-none h-8 w-8 sm:h-9 sm:w-9" onClick={() => setViewMode("list")}>
+                                    <ListIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                 </Button>
                             </div>
 
@@ -907,16 +953,17 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
                             <Button
                                 variant={previewsEnabled ? "secondary" : "ghost"}
                                 size="icon"
+                                className="h-8 w-8 sm:h-9 sm:w-9"
                                 onClick={handleTogglePreviews}
                                 title={previewsEnabled ? "Disable previews" : "Enable previews"}
                             >
-                                {previewsEnabled ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                                {previewsEnabled ? <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> : <EyeOff className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
                             </Button>
 
                             {/* Sort Menu */}
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="sm">
+                                    <Button variant="ghost" size="sm" className="h-8 px-2 text-xs sm:h-9 sm:px-3 sm:text-sm">
                                         Sort
                                     </Button>
                                 </DropdownMenuTrigger>
@@ -944,8 +991,8 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
 
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                    <Button disabled={!isLoggedIn} variant={!isLoggedIn ? "outline" : "default"} className={cn(!isLoggedIn && "opacity-50 cursor-not-allowed")}>
-                                        <Upload className="mr-2 h-4 w-4" /> Upload
+                                    <Button disabled={!isLoggedIn} variant={!isLoggedIn ? "outline" : "default"} size="sm" className={cn("h-8 px-2 text-xs sm:h-9 sm:px-3 sm:text-sm", !isLoggedIn && "opacity-50 cursor-not-allowed")}>
+                                        <Upload className="mr-1.5 h-3.5 w-3.5 sm:mr-2 sm:h-4 sm:w-4" /> Upload
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent>
@@ -965,21 +1012,21 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
                     </div>
 
                     {/* Bottom row - Search and filters */}
-                    <div className="flex flex-col sm:flex-row gap-2">
-                        <div className="relative flex-1">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-2">
+                        <div className="relative flex-1 min-w-0">
+                            <Search className="absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
                             <Input
                                 placeholder="Search files..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="pl-9"
+                                className="pl-8 h-8 sm:pl-9 sm:h-9 text-sm"
                             />
                         </div>
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="outline" className="gap-2">
-                                    <Filter className="h-4 w-4" />
-                                    {filterType === "all" ? "All Files" : filterType.charAt(0).toUpperCase() + filterType.slice(1)}
+                                <Button variant="outline" size="sm" className="gap-1.5 h-8 px-2 text-xs sm:h-9 sm:px-3 sm:text-sm">
+                                    <Filter className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                    <span className="truncate">{filterType === "all" ? "All" : filterType.charAt(0).toUpperCase() + filterType.slice(1)}</span>
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
@@ -1038,8 +1085,8 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
                     </div>
                 ) : (
                     <div
-                        className={cn("flex-1 overflow-auto content-start",
-                            viewMode === "grid" ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3" : "flex flex-col gap-2"
+                        className={cn("flex-1 min-h-0 overflow-auto content-start",
+                            viewMode === "grid" ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 sm:gap-3" : "flex flex-col gap-1.5 sm:gap-2"
                         )}
                     >
                         {filteredAndSortedFiles.map((file) => {
@@ -1070,25 +1117,25 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
                                     key={file.name}
                                     className={cn(
                                         "group relative border rounded-lg hover:bg-muted/50 transition-colors",
-                                        viewMode === "grid" ? "flex flex-col items-center gap-3 text-center aspect-[4/5] justify-center" : "flex items-center gap-4"
+                                        viewMode === "grid" ? "flex flex-col items-center gap-2 sm:gap-3 text-center aspect-[4/5] justify-center" : "flex items-center gap-2 sm:gap-4"
                                     )}
                                     onMouseEnter={(e) => handleFileMouseEnter(e, file, isPreviewable)}
                                     onMouseLeave={handleFileMouseLeave}
                                 >
                                     <div className="flex-1 flex w-full h-full items-center cursor-pointer overflow-hidden">
-                                        <Wrapper className={cn("flex-1 flex w-full h-full items-center", viewMode === "grid" ? "flex-col justify-center p-4 content-center" : "gap-4 p-3")}>
+                                        <Wrapper className={cn("flex-1 flex w-full h-full items-center min-w-0", viewMode === "grid" ? "flex-col justify-center p-2 sm:p-4 content-center" : "gap-2 sm:gap-4 p-2 sm:p-3")}>
                                             {/* Preview/Icon */}
-                                            <div className="relative pointer-events-none">
+                                            <div className="relative pointer-events-none shrink-0">
                                                 {file.isDirectory ? (
-                                                    <Folder className="h-12 w-12 text-muted-foreground" />
+                                                    <Folder className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground" />
                                                 ) : (
                                                     getFileIcon(file.mimetype)
                                                 )}
                                             </div>
 
                                             <div className={cn("min-w-0 text-foreground", viewMode === "list" && "text-left flex-1")}>
-                                                <p className="text-sm font-medium truncate w-full">{file.name}</p>
-                                                {viewMode === "list" && <p className="text-xs text-muted-foreground">{formatFileSize(file.size)} • {new Date(file.modified).toLocaleDateString()}</p>}
+                                                <p className="text-xs sm:text-sm font-medium truncate w-full">{file.name}</p>
+                                                {viewMode === "list" && <p className="text-[10px] sm:text-xs text-muted-foreground">{formatFileSize(file.size)} • {new Date(file.modified).toLocaleDateString()}</p>}
                                             </div>
                                         </Wrapper>
                                     </div>
@@ -1097,8 +1144,8 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
                                     <div onClick={(e) => e.stopPropagation()} className="z-10 relative">
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity mr-2">
-                                                    <MoreVertical className="h-4 w-4" />
+                                                <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity mr-1 sm:mr-2 shrink-0">
+                                                    <MoreVertical className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                                 </Button>
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end">
@@ -1110,7 +1157,7 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
                                                 <DropdownMenuItem onClick={() => { setFileToRename(file); setNewFileName(file.name); setRenameDialogOpen(true); }}>
                                                     <Edit className="mr-2 h-4 w-4" /> Rename
                                                 </DropdownMenuItem>
-                                                <DropdownMenuItem onClick={() => openShareDialog(file)}>
+                                                <DropdownMenuItem disabled={currentPath.startsWith("public")} onClick={() => !currentPath.startsWith("public") && openShareDialog(file)}>
                                                     <Share2 className="mr-2 h-4 w-4" /> Share
                                                 </DropdownMenuItem>
                                                 <DropdownMenuSeparator />
@@ -1126,9 +1173,9 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
                     </div>
                 )}
 
-                {/* Dialogs */}
+                {/* Dialogs - mobile: contain in viewport, scroll if needed */}
                 <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
-                    <DialogContent>
+                    <DialogContent className="max-h-[85vh] overflow-y-auto w-[calc(100vw-2rem)] max-w-lg">
                         <DialogHeader>
                             <DialogTitle>Rename {fileToRename?.isDirectory ? "Folder" : "File"}</DialogTitle>
                         </DialogHeader>
@@ -1143,9 +1190,9 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
                 </Dialog>
 
                 <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-                    <DialogContent>
+                    <DialogContent className="max-h-[85vh] overflow-y-auto w-[calc(100vw-2rem)] max-w-lg">
                         <DialogHeader>
-                            <DialogTitle>Delete {fileToDelete?.name}?</DialogTitle>
+                            <DialogTitle className="truncate pr-8">Delete {fileToDelete?.name}?</DialogTitle>
                             <DialogDescription>This action cannot be undone.</DialogDescription>
                         </DialogHeader>
                         <DialogFooter>
@@ -1156,15 +1203,19 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
                 </Dialog>
 
                 <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
-                    <DialogContent>
+                    <DialogContent className="max-h-[85vh] overflow-y-auto w-[calc(100vw-2rem)] max-w-lg">
                         <DialogHeader>
                             <DialogTitle>Share {fileToShare?.name}</DialogTitle>
                             <DialogDescription>Create a shareable link for this file.</DialogDescription>
                         </DialogHeader>
-                        <div className="py-4 space-y-4">
-                            {!shareLink ? (
+                        <div className="py-4 space-y-4 min-w-0">
+                            {isLoadingShare ? (
+                                <div className="flex items-center justify-center py-8">
+                                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                                </div>
+                            ) : !shareLink ? (
                                 <>
-                                    <div className="grid gap-2">
+                                    <div className="grid gap-2 min-w-0">
                                         <label className="text-sm font-medium">Password (optional)</label>
                                         <Input 
                                             type="text" 
@@ -1180,18 +1231,24 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
                                     </Button>
                                 </>
                             ) : (
-                                <div className="space-y-4">
-                                    <div className="p-3 bg-muted rounded-lg">
+                                <div className="space-y-4 min-w-0">
+                                    <div className="p-3 bg-muted rounded-lg min-w-0 overflow-hidden">
                                         <p className="text-xs text-muted-foreground mb-1">Shareable Link</p>
-                                        <code className="text-sm break-all">{shareLink}</code>
+                                        <code className="text-sm break-all block">{shareLink}</code>
                                     </div>
-                                    <div className="flex gap-2">
-                                        <Button onClick={copyShareLink} className="flex-1">
+                                    <div className="flex flex-col sm:flex-row gap-2">
+                                        <Button onClick={copyShareLink} className="flex-1 min-w-0">
                                             Copy Link
                                         </Button>
-                                        <Button variant="outline" onClick={() => window.open(shareLink, '_blank')}>
+                                        <Button variant="outline" onClick={() => window.open(shareLink, "_blank")} className="min-w-0">
                                             Open
                                         </Button>
+                                        {shareId && (
+                                            <Button variant="destructive" onClick={handleRevokeShare} disabled={isRevoking} className="min-w-0">
+                                                {isRevoking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                                Revoke
+                                            </Button>
+                                        )}
                                     </div>
                                 </div>
                             )}

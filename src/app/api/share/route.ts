@@ -9,9 +9,11 @@ function generateShortId(): string {
     return crypto.randomBytes(8).toString('base64url');
 }
 
+const isPublicPath = (normalized: string) =>
+    normalized === 'public' || normalized.startsWith('public/');
+
 export async function POST(req: Request) {
     const session = await getSession();
-    if (!session) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
     try {
         const { path: filePath, password, expiresIn } = await req.json();
@@ -23,10 +25,12 @@ export async function POST(req: Request) {
             return NextResponse.json({ message: "Invalid path" }, { status: 400 });
         }
 
-        // Generate a short, URL-safe ID
+        // Private paths require login; public paths can be shared without login
+        if (!isPublicPath(normalized) && !session) {
+            return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+        }
+
         const id = generateShortId();
-        
-        // Calculate expiration date if provided (in hours)
         let expiresAt = null;
         if (expiresIn && expiresIn > 0) {
             const expDate = new Date();
@@ -35,14 +39,13 @@ export async function POST(req: Request) {
         }
 
         db.prepare('INSERT INTO shares (id, file_path, password, created_by, expires_at) VALUES (?, ?, ?, ?, ?)').run(
-            id, 
-            normalized, 
+            id,
+            normalized,
             password || null,
-            session.id,
+            session?.id ?? null,
             expiresAt
         );
 
-        // Return the short URL
         return NextResponse.json({ link: `/u/${id}`, id });
     } catch (e) {
         console.error('Share error:', e);
@@ -70,24 +73,27 @@ export async function GET(req: Request) {
 
 export async function DELETE(req: Request) {
     const session = await getSession();
-    if (!session) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-    
+
     try {
         const { id } = await req.json();
-        
-        // Check ownership or admin
-        const share = db.prepare('SELECT created_by FROM shares WHERE id = ?').get(id) as { created_by: number } | undefined;
+        const share = db.prepare('SELECT created_by FROM shares WHERE id = ?').get(id) as { created_by: number | null } | undefined;
         if (!share) return NextResponse.json({ message: "Not found" }, { status: 404 });
-        
+
+        // Anonymous public shares (created_by null) can be revoked by anyone (e.g. creator who has the id)
+        if (share.created_by === null) {
+            db.prepare('DELETE FROM shares WHERE id = ?').run(id);
+            return NextResponse.json({ message: "Share deleted" });
+        }
+
+        if (!session) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+
         const user = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(session.id) as { is_admin: number } | undefined;
         const isAdmin = user?.is_admin === 1;
-        
         if (share.created_by !== session.id && !isAdmin) {
             return NextResponse.json({ message: "Unauthorized" }, { status: 403 });
         }
-        
+
         db.prepare('DELETE FROM shares WHERE id = ?').run(id);
-        
         return NextResponse.json({ message: "Share deleted" });
     } catch (e) {
         return NextResponse.json({ message: "Error" }, { status: 500 });
