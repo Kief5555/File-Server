@@ -730,30 +730,41 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
             { duration: Infinity }
         );
 
+        const CONCURRENCY = 6; // parallel chunk uploads
+        let completedBytes = 0;
+
+        const uploadChunk = async (i: number) => {
+            const start = i * CHUNK_SIZE;
+            const end = Math.min(file.size, start + CHUNK_SIZE);
+            const chunk = file.slice(start, end);
+
+            const formData = new FormData();
+            formData.append("file", chunk);
+            formData.append("chunkIndex", i.toString());
+            formData.append("totalChunks", totalChunks.toString());
+            formData.append("identifier", identifier);
+            formData.append("fileName", file.name);
+
+            const res = await fetch(`/api/upload?path=${currentPath}`, {
+                method: "POST",
+                body: formData,
+            });
+
+            if (!res.ok) throw new Error(`Failed to upload chunk ${i}`);
+            completedBytes += end - start;
+            const progress = (completedBytes / file.size) * 100;
+            updateToast(toastId, completedBytes, progress);
+        };
+
         try {
-            for (let i = 0; i < totalChunks; i++) {
-                const start = i * CHUNK_SIZE;
-                const end = Math.min(file.size, start + CHUNK_SIZE);
-                const chunk = file.slice(start, end);
-
-                const formData = new FormData();
-                formData.append("file", chunk);
-                formData.append("chunkIndex", i.toString());
-                formData.append("totalChunks", totalChunks.toString());
-                formData.append("identifier", identifier);
-                formData.append("fileName", file.name);
-
-                const res = await fetch(`/api/upload?path=${currentPath}`, {
-                    method: "POST",
-                    body: formData,
-                });
-
-                if (!res.ok) throw new Error(`Failed to upload chunk ${i}`);
-
-                const bytesUploaded = end;
-                const progress = (bytesUploaded / file.size) * 100;
-                updateToast(toastId, bytesUploaded, progress);
-            }
+            const indices = Array.from({ length: totalChunks }, (_, i) => i);
+            const runNext = async (): Promise<void> => {
+                const i = indices.shift();
+                if (i === undefined) return;
+                await uploadChunk(i);
+                await runNext();
+            };
+            await Promise.all(Array.from({ length: Math.min(CONCURRENCY, totalChunks) }, () => runNext()));
 
             toast.success(
                 <div>

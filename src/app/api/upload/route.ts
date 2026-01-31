@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs';
+import fsp from 'fs/promises';
 import path from 'path';
 import { getSession } from '@/lib/auth';
 import { invalidateFolderSizeCache } from '@/lib/files';
@@ -48,32 +49,37 @@ export async function POST(req: Request) {
         // Handle chunked upload
         if (!isNaN(chunkIndex) && !isNaN(totalChunks) && identifier) {
             const chunkDir = path.join(tempRoot, identifier);
-            if (!fs.existsSync(chunkDir)) {
-                fs.mkdirSync(chunkDir, { recursive: true });
-            }
+            await fsp.mkdir(chunkDir, { recursive: true });
 
             const chunkPath = path.join(chunkDir, chunkIndex.toString());
             const buffer = Buffer.from(await file.arrayBuffer());
-            fs.writeFileSync(chunkPath, buffer);
+            await fsp.writeFile(chunkPath, buffer);
 
             // If it's the last chunk, merge them
             if (chunkIndex === totalChunks - 1) {
-                // Ensure file is empty/fresh if it already exists from a previous partial attempt
                 if (fs.existsSync(filePath)) {
-                    fs.unlinkSync(filePath);
+                    await fsp.unlink(filePath);
                 }
 
+                const writeStream = fs.createWriteStream(filePath, { flags: 'a' });
                 for (let i = 0; i < totalChunks; i++) {
                     const p = path.join(chunkDir, i.toString());
-                    if (!fs.existsSync(p)) {
+                    try {
+                        await fsp.access(p);
+                    } catch {
+                        writeStream.close();
                         return NextResponse.json({ message: `Chunk ${i} missing` }, { status: 400 });
                     }
-                    const data = fs.readFileSync(p);
-                    fs.appendFileSync(filePath, data);
-                    fs.unlinkSync(p);
+                    const data = await fsp.readFile(p);
+                    await new Promise<void>((resolve, reject) => {
+                        writeStream.write(data, (err) => (err ? reject(err) : resolve()));
+                    });
+                    await fsp.unlink(p);
                 }
-                // Clean up temp dir
-                fs.rmdirSync(chunkDir);
+                await new Promise<void>((resolve, reject) => {
+                    writeStream.close((err) => (err ? reject(err) : resolve()));
+                });
+                await fsp.rmdir(chunkDir);
                 invalidateFolderSizeCache(targetPathQuery);
                 return NextResponse.json({ message: "Uploaded and merged" });
             }
