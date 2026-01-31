@@ -43,6 +43,16 @@ export function middleware(request: NextRequest) {
         if (request.method === 'OPTIONS') {
             return new NextResponse(null, { status: 204, headers: corsHeaders });
         }
+        // Strip trailing slash via rewrite so Next.js doesn't send 308 (CORS blocks redirect)
+        if (pathname.length > 4 && pathname.endsWith('/')) {
+            const url = request.nextUrl.clone();
+            url.pathname = pathname.slice(0, -1);
+            const response = NextResponse.rewrite(url);
+            Object.entries(corsHeaders).forEach(([key, value]) => {
+                response.headers.set(key, value);
+            });
+            return response;
+        }
         const response = NextResponse.next();
         Object.entries(corsHeaders).forEach(([key, value]) => {
             response.headers.set(key, value);
