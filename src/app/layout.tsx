@@ -24,6 +24,7 @@ export default function RootLayout({
           defaultTheme="system"
           enableSystem
           disableTransitionOnChange
+          scriptProps={{ 'data-cfasync': 'false' }}
         >
           {children}
           <Toaster />
