@@ -16,7 +16,8 @@ function serveFileWithRangeSupport(req: Request, absPath: string, mimetype: stri
     const fileSize = stat.size;
     const fileName = path.basename(absPath);
     const isLargeFile = fileSize > MAX_BUFFER_SIZE;
-    const disposition = isDownload || isLargeFile ? 'attachment' : 'inline';
+    const isUnsafeInlineType = ['text/html', 'application/xhtml+xml', 'image/svg+xml'].includes(mimetype);
+    const disposition = isDownload || isLargeFile || isUnsafeInlineType ? 'attachment' : 'inline';
     
     const rangeHeader = req.headers.get('range');
     
