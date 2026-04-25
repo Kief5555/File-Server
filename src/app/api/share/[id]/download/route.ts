@@ -6,8 +6,6 @@ import { Readable } from 'stream';
 import mime from 'mime-types';
 import { getResolvedAbsPath } from '@/lib/files';
 
-const MAX_BUFFER_SIZE = 2 * 1024 * 1024 * 1024; // 2 GiB
-
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
     const { searchParams } = new URL(req.url);
@@ -31,24 +29,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const filename = path.basename(fullPath);
     const stat = fs.statSync(fullPath);
     const fileSize = stat.size;
-
-    if (fileSize > MAX_BUFFER_SIZE) {
-        const nodeStream = fs.createReadStream(fullPath);
-        const webStream = Readable.toWeb(nodeStream) as ReadableStream<Uint8Array>;
-        return new NextResponse(webStream, {
-            headers: {
-                'Content-Type': mimetype,
-                'Content-Disposition': `attachment; filename="${filename}"`,
-                'Content-Length': fileSize.toString()
-            }
-        });
-    }
-
-    const fileBuffer = fs.readFileSync(fullPath);
-    return new NextResponse(fileBuffer, {
+    const nodeStream = fs.createReadStream(fullPath);
+    const webStream = Readable.toWeb(nodeStream) as ReadableStream<Uint8Array>;
+    return new NextResponse(webStream, {
         headers: {
             'Content-Type': mimetype,
-            'Content-Disposition': `attachment; filename="${filename}"`
+            'Content-Disposition': `attachment; filename="${filename}"`,
+            'Content-Length': fileSize.toString()
         }
     });
 }

@@ -19,16 +19,12 @@ function getPathFromUrl(url: string) {
     return [];
 }
 
-// Node Buffer max ~2 GiB; for larger files we must stream and force download
-const MAX_BUFFER_SIZE = 2 * 1024 * 1024 * 1024;
-
 // Serve file with range request support (needed for video/audio seeking)
 async function serveFileWithRangeSupport(req: Request, absPath: string, mimetype: string, isDownload: boolean) {
     const stat = await fsp.stat(absPath);
     const fileSize = stat.size;
     const fileName = path.basename(absPath);
-    const isLargeFile = fileSize > MAX_BUFFER_SIZE;
-    const disposition = isDownload || isLargeFile ? 'attachment' : 'inline';
+    const disposition = isDownload ? 'attachment' : 'inline';
     
     const rangeHeader = req.headers.get('range');
     
@@ -43,41 +39,18 @@ async function serveFileWithRangeSupport(req: Request, absPath: string, mimetype
             });
         }
         const chunkSize = end - start + 1;
-        // For range > 2 GiB we cannot Buffer.concat; stream instead
-        if (chunkSize > MAX_BUFFER_SIZE) {
-            const nodeStream = fs.createReadStream(absPath, { start, end });
-            const webStream = Readable.toWeb(nodeStream) as ReadableStream<Uint8Array>;
-            return new NextResponse(webStream, {
-                status: 206,
-                headers: {
-                    'Content-Type': mimetype,
-                    'Content-Length': chunkSize.toString(),
-                    'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-                    'Accept-Ranges': 'bytes',
-                    'Content-Disposition': `${disposition}; filename="${fileName}"`,
-                    'Cache-Control': 'public, max-age=3600'
-                }
-            });
-        }
-        return new Promise<NextResponse>((resolve) => {
-            const fileStream = fs.createReadStream(absPath, { start, end });
-            const chunks: Buffer[] = [];
-            fileStream.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
-            fileStream.on('end', () => {
-                const buffer = Buffer.concat(chunks);
-                resolve(new NextResponse(buffer, {
-                    status: 206,
-                    headers: {
-                        'Content-Type': mimetype,
-                        'Content-Length': chunkSize.toString(),
-                        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-                        'Accept-Ranges': 'bytes',
-                        'Content-Disposition': `${disposition}; filename="${fileName}"`,
-                        'Cache-Control': 'public, max-age=3600'
-                    }
-                }));
-            });
-            fileStream.on('error', () => resolve(new NextResponse(null, { status: 500 })));
+        const nodeStream = fs.createReadStream(absPath, { start, end });
+        const webStream = Readable.toWeb(nodeStream) as ReadableStream<Uint8Array>;
+        return new NextResponse(webStream, {
+            status: 206,
+            headers: {
+                'Content-Type': mimetype,
+                'Content-Length': chunkSize.toString(),
+                'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+                'Accept-Ranges': 'bytes',
+                'Content-Disposition': `${disposition}; filename="${fileName}"`,
+                'Cache-Control': 'public, max-age=3600'
+            }
         });
     }
 

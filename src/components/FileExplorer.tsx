@@ -763,6 +763,8 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
             formData.append("totalChunks", totalChunks.toString());
             formData.append("identifier", identifier);
             formData.append("fileName", file.name);
+            formData.append("fileSize", file.size.toString());
+            formData.append("chunkSize", CHUNK_SIZE.toString());
 
             let lastErr: Error | null = null;
             for (let attempt = 1; attempt <= CHUNK_RETRIES; attempt++) {
