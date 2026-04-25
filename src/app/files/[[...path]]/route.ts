@@ -7,12 +7,17 @@ import { getAbsPath } from '@/lib/files';
 import db, { getSetting } from '@/lib/db';
 import mime from 'mime-types';
 
+const MAX_INLINE_FILE_BYTES = 2 * 1024 * 1024 * 1024;
+const UNSAFE_INLINE_TYPES = new Set(['text/html', 'application/xhtml+xml', 'image/svg+xml']);
+
 // Serve file with range request support (needed for video/audio seeking)
 function serveFileWithRangeSupport(req: Request, absPath: string, mimetype: string, isDownload: boolean): NextResponse {
     const stat = fs.statSync(absPath);
     const fileSize = stat.size;
     const fileName = path.basename(absPath);
-    const disposition = isDownload ? 'attachment' : 'inline';
+    const isLargeFile = fileSize > MAX_INLINE_FILE_BYTES;
+    const isUnsafeInlineType = UNSAFE_INLINE_TYPES.has(mimetype);
+    const disposition = isDownload || isLargeFile || isUnsafeInlineType ? 'attachment' : 'inline';
     
     const rangeHeader = req.headers.get('range');
     
