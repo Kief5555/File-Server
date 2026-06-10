@@ -21,13 +21,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import {
-    HoverCard,
-    HoverCardContent,
-    HoverCardTrigger,
-} from "@/components/ui/hover-card";
 import { cn } from "@/lib/utils";
-import { Progress } from "@/components/ui/progress"; // Need to install Progress if not present, otherwise generic simplified
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
@@ -65,6 +59,23 @@ const formatTime = (time: number) => {
 
 const PREVIEW_MAX_SIZE_BYTES = 200 * 1024 * 1024; 
 const PREVIEW_HOVER_DELAY_MS = 450; // Delay before showing preview to avoid loading on quick hovers
+const PREVIEW_WIDTH = 320;
+const PREVIEW_HEIGHT_ESTIMATE = 360;
+const PREVIEW_MARGIN = 16;
+
+const supportsDesktopHover = () => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+};
+
+const getPreviewUrl = (currentPath: string, fileName: string) => {
+    const encodedPath = currentPath
+        .split("/")
+        .filter(Boolean)
+        .map(encodeURIComponent)
+        .join("/");
+    return `/api/files/${encodedPath}/${encodeURIComponent(fileName)}`;
+};
 
 const VideoPreview = ({ src }: { src: string }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -433,10 +444,9 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
     const [isLoadingShare, setIsLoadingShare] = useState(false);
     const [isRevoking, setIsRevoking] = useState(false);
 
-    // Preview State - simplified: click to pin, click elsewhere to close
+    // Desktop-only hover preview.
     const [hoveredFile, setHoveredFile] = useState<FileItem | null>(null);
     const [previewPos, setPreviewPos] = useState({ x: 0, y: 0 });
-    const [isPinned, setIsPinned] = useState(false);
     const previewRef = useRef<HTMLDivElement>(null);
     const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const showPreviewTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -451,11 +461,10 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
             showPreviewTimeoutRef.current = null;
         }
         setHoveredFile(null);
-        setIsPinned(false);
     };
 
     const handleFileMouseEnter = (e: React.MouseEvent, file: FileItem, isPreviewable: boolean) => {
-        if (isPinned) return;
+        if (!supportsDesktopHover()) return;
         if (showPreviewTimeoutRef.current) {
             clearTimeout(showPreviewTimeoutRef.current);
             showPreviewTimeoutRef.current = null;
@@ -468,7 +477,15 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
             setHoveredFile(null);
             return;
         }
-        setPreviewPos({ x: e.clientX, y: e.clientY });
+        const x = Math.min(
+            Math.max(e.clientX + 18, PREVIEW_MARGIN),
+            window.innerWidth - PREVIEW_WIDTH - PREVIEW_MARGIN
+        );
+        const y = Math.min(
+            Math.max(e.clientY + 18, PREVIEW_MARGIN),
+            window.innerHeight - PREVIEW_HEIGHT_ESTIMATE - PREVIEW_MARGIN
+        );
+        setPreviewPos({ x, y });
         // Delay before showing preview so we don't load media on quick hovers
         showPreviewTimeoutRef.current = setTimeout(() => {
             showPreviewTimeoutRef.current = null;
@@ -477,7 +494,6 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
     };
 
     const handleFileMouseLeave = () => {
-        if (isPinned) return;
         if (showPreviewTimeoutRef.current) {
             clearTimeout(showPreviewTimeoutRef.current);
             showPreviewTimeoutRef.current = null;
@@ -488,7 +504,6 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
     };
 
     const handlePreviewMouseEnter = () => {
-        // Cancel close timeout when entering preview
         if (hoverTimeoutRef.current) {
             clearTimeout(hoverTimeoutRef.current);
             hoverTimeoutRef.current = null;
@@ -496,55 +511,12 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
     };
 
     const handlePreviewMouseLeave = () => {
-        // Close when leaving preview (unless pinned)
-        if (!isPinned) {
-            closePreview();
-        }
+        closePreview();
     };
 
-    const handlePreviewClick = (e: React.MouseEvent) => {
-        // Only pin/unpin if clicking directly on the preview container, not on media inside
-        // Check if the click target is a media element or inside a media container
-        const target = e.target as HTMLElement;
-        const isMediaElement = target.tagName === 'VIDEO' ||
-                               target.tagName === 'AUDIO' ||
-                               target.closest('video') ||
-                               target.closest('audio') ||
-                               target.closest('[data-media-controls]');
-
-        if (isMediaElement) {
-            // Don't pin when clicking on media - just stop propagation
-            e.stopPropagation();
-            return;
-        }
-
-        e.stopPropagation();
-
-        // When preview is not pinned, first click = open/download the file (preview was overlapping the row)
-        if (!isPinned && hoveredFile) {
-            closePreview();
-            window.location.href = `/files/${currentPath}/${encodeURIComponent(hoveredFile.name)}`;
-            return;
-        }
-
-        // Clicking on the preview container when pinned toggles pin
-        setIsPinned(!isPinned);
-    };
-
-    const handleUnpin = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        setIsPinned(false);
-    };
-
-    // Close preview on outside click (but not when clicking a file/folder link - let that click through)
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
             if (previewRef.current && previewRef.current.contains(e.target as Node)) {
-                return;
-            }
-            // Don't close on file/folder link click so a single click opens or downloads the file
-            const target = e.target as HTMLElement;
-            if (target.closest('a[href*="/files/"]')) {
                 return;
             }
             closePreview();
@@ -1004,7 +976,7 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
                             <Button
                                 variant={previewsEnabled ? "secondary" : "ghost"}
                                 size="icon"
-                                className="h-8 w-8 sm:h-9 sm:w-9"
+                                className="hidden md:inline-flex h-8 w-8 sm:h-9 sm:w-9"
                                 onClick={handleTogglePreviews}
                                 title={previewsEnabled ? "Disable previews" : "Enable previews"}
                             >
@@ -1312,35 +1284,21 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
                 </Dialog>
             </div>
 
-            {/* Floating Preview - click to pin */}
+            {/* Floating Preview */}
             {hoveredFile && (
                 <div
                     ref={previewRef}
                     className={cn(
-                        "fixed z-50 w-80 shadow-2xl bg-card overflow-hidden rounded-lg transition-all",
-                        isPinned ? "border-2 border-primary" : "border-2 border-primary/20"
+                        "hidden md:block fixed z-50 w-80 shadow-2xl bg-card overflow-hidden rounded-lg border-2 border-primary/20"
                     )}
                     style={{
-                        left: previewPos.x + 25,
-                        top: previewPos.y + 15,
-                        transform: `translate(${previewPos.x + 360 > (typeof window !== 'undefined' ? window.innerWidth : 0) ? '-110%' : '0%'}, ${previewPos.y + 350 > (typeof window !== 'undefined' ? window.innerHeight : 0) ? '-110%' : '0%'})`
+                        left: previewPos.x,
+                        top: previewPos.y,
                     }}
                     onMouseEnter={handlePreviewMouseEnter}
                     onMouseLeave={handlePreviewMouseLeave}
-                    onClick={handlePreviewClick}
                     onMouseDown={(e) => e.stopPropagation()}
                 >
-                    {/* Pin indicator - click to unpin */}
-                    {isPinned && (
-                        <div className="absolute top-2 left-2 z-10">
-                            <button 
-                                onClick={handleUnpin}
-                                className="px-2 py-0.5 bg-primary text-primary-foreground rounded text-[10px] font-medium hover:bg-primary/80 transition-colors cursor-pointer"
-                            >
-                                ✕ Unpin
-                            </button>
-                        </div>
-                    )}
                     <div className="p-4 space-y-3">
                         <div className="space-y-1">
                             <h4 className="text-sm font-semibold truncate">{hoveredFile.name}</h4>
@@ -1350,24 +1308,17 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
                         </div>
                         <div className="rounded-md border bg-black/5 overflow-hidden">
                             {hoveredFile.mimetype.startsWith("image/") && (
-                                <ImagePreview src={`/api/files/${currentPath}/${hoveredFile.name}`} />
+                                <ImagePreview src={getPreviewUrl(currentPath, hoveredFile.name)} />
                             )}
                             {(hoveredFile.mimetype.startsWith("video/") || hoveredFile.name.toLowerCase().endsWith('.mov')) && (
-                                <VideoPreview src={`/api/files/${currentPath}/${hoveredFile.name}`} />
+                                <VideoPreview src={getPreviewUrl(currentPath, hoveredFile.name)} />
                             )}
                             {hoveredFile.mimetype.startsWith("audio/") && (
-                                <AudioPreview src={`/api/files/${currentPath}/${hoveredFile.name}`} />
+                                <AudioPreview src={getPreviewUrl(currentPath, hoveredFile.name)} />
                             )}
                             {(hoveredFile.mimetype.includes("text") || hoveredFile.mimetype === "application/json") && (
-                                <TextPreview src={`/api/files/${currentPath}/${hoveredFile.name}`} />
+                                <TextPreview src={getPreviewUrl(currentPath, hoveredFile.name)} />
                             )}
-                        </div>
-                        <div className="text-[10px] text-center text-muted-foreground italic">
-                            {(hoveredFile.mimetype.startsWith("video/") || hoveredFile.name.toLowerCase().endsWith('.mov')) 
-                                ? "Click to pin • Play/Hold 2s for 2x" 
-                                : hoveredFile.mimetype.startsWith("audio/") 
-                                    ? "Click to pin • Play/pause audio"
-                                    : "Click to pin preview"}
                         </div>
                     </div>
                 </div>

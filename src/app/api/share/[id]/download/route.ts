@@ -5,17 +5,25 @@ import path from 'path';
 import { Readable } from 'stream';
 import mime from 'mime-types';
 import { getResolvedAbsPath } from '@/lib/files';
+import { verifySharePassword } from '@/lib/sharePasswords';
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
     const { searchParams } = new URL(req.url);
     const password = searchParams.get('password');
 
-    const share = db.prepare('SELECT * FROM shares WHERE id = ?').get(id) as any;
+    const share = db.prepare('SELECT file_path, password, expires_at FROM shares WHERE id = ?').get(id) as {
+        file_path: string;
+        password: string | null;
+        expires_at: string | null;
+    } | undefined;
 
     if (!share) return NextResponse.json({ message: "Not found" }, { status: 404 });
+    if (share.expires_at && new Date(share.expires_at) < new Date()) {
+        return NextResponse.json({ message: "Not found" }, { status: 404 });
+    }
 
-    if (share.password && share.password !== password) {
+    if (!(await verifySharePassword(share.password, password))) {
         return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 

@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
+import bcrypt from 'bcrypt';
 
 // Ensure database directory exists
 const dbDir = path.join(process.cwd(), 'database');
@@ -63,22 +64,22 @@ db.exec(`
 // Add columns if they don't exist (migration for existing databases)
 try {
   db.exec(`ALTER TABLE users ADD COLUMN can_upload INTEGER DEFAULT 0`);
-} catch (e) { /* Column exists */ }
+} catch { /* Column exists */ }
 try {
   db.exec(`ALTER TABLE users ADD COLUMN can_delete INTEGER DEFAULT 0`);
-} catch (e) { /* Column exists */ }
+} catch { /* Column exists */ }
 try {
   db.exec(`ALTER TABLE users ADD COLUMN can_access_private INTEGER DEFAULT 0`);
-} catch (e) { /* Column exists */ }
+} catch { /* Column exists */ }
 try {
   db.exec(`ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0`);
-} catch (e) { /* Column exists */ }
+} catch { /* Column exists */ }
 try {
   db.exec(`ALTER TABLE shares ADD COLUMN created_by INTEGER`);
-} catch (e) { /* Column exists */ }
+} catch { /* Column exists */ }
 try {
   db.exec(`ALTER TABLE shares ADD COLUMN expires_at DATETIME`);
-} catch (e) { /* Column exists */ }
+} catch { /* Column exists */ }
 try {
   db.exec(`CREATE TABLE IF NOT EXISTS api_keys (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -89,7 +90,24 @@ try {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   )`);
-} catch (e) { /* Table exists */ }
+} catch { /* Table exists */ }
+
+try {
+  const legacySharePasswords = db.prepare(`
+    SELECT id, password
+    FROM shares
+    WHERE password IS NOT NULL
+      AND password != ''
+      AND password NOT LIKE '$2a$%'
+      AND password NOT LIKE '$2b$%'
+      AND password NOT LIKE '$2y$%'
+  `).all() as { id: string; password: string }[];
+  const updateSharePassword = db.prepare('UPDATE shares SET password = ? WHERE id = ?');
+
+  for (const share of legacySharePasswords) {
+    updateSharePassword.run(bcrypt.hashSync(share.password, 10), share.id);
+  }
+} catch { /* Best-effort migration */ }
 
 // Helper functions for settings
 export function getSetting(key: string): string | null {

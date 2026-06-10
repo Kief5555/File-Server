@@ -4,6 +4,12 @@ import bcrypt from 'bcrypt';
 import { signToken } from '@/lib/auth';
 import { cookies } from 'next/headers';
 
+type UserRecord = {
+    id: number;
+    username: string;
+    password: string;
+};
+
 export async function POST(req: Request) {
     try {
         const { username, password } = await req.json();
@@ -12,7 +18,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ message: "Missing credentials" }, { status: 400 });
         }
 
-        const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username) as any;
+        const user = db.prepare('SELECT id, username, password FROM users WHERE username = ?').get(username) as UserRecord | undefined;
 
         if (!user || !(await bcrypt.compare(password, user.password))) {
             return NextResponse.json({ message: "Invalid credentials" }, { status: 401 });
@@ -24,12 +30,13 @@ export async function POST(req: Request) {
         cookieStore.set('token', token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
             path: '/',
             maxAge: 60 * 60 * 24 * 7 // 7 days
         });
 
         return NextResponse.json({ message: "Logged in", user: { username: user.username } });
-    } catch (e) {
+    } catch {
         return NextResponse.json({ message: "Error" }, { status: 500 });
     }
 }

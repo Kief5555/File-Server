@@ -3,16 +3,24 @@ import { cookies, headers } from 'next/headers';
 import db from './db';
 import crypto from 'crypto';
 
-const SECRET_KEY = process.env.JWT_SECRET || 'your-secret-key-change-it';
+const DEV_SECRET_KEY = crypto.randomBytes(32).toString('base64url');
+
+function getJwtSecret(): string {
+    if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
+    if (process.env.NODE_ENV === 'production') {
+        throw new Error('JWT_SECRET must be set in production.');
+    }
+    return DEV_SECRET_KEY;
+}
 
 export function signToken(payload: object) {
-    return jwt.sign(payload, SECRET_KEY, { expiresIn: '7d' });
+    return jwt.sign(payload, getJwtSecret(), { expiresIn: '7d' });
 }
 
 export function verifyToken(token: string) {
     try {
-        return jwt.verify(token, SECRET_KEY);
-    } catch (e) {
+        return jwt.verify(token, getJwtSecret());
+    } catch {
         return null;
     }
 }
@@ -51,7 +59,7 @@ export async function getSession() {
                 return { id: apiKeyRecord.id, username: apiKeyRecord.username };
             }
         }
-    } catch (e) {
+    } catch {
         // Headers might not be available in all contexts, continue to cookie auth
     }
     

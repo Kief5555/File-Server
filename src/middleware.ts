@@ -1,12 +1,22 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+function getCorsHeaders(request: NextRequest) {
+  const origin = request.headers.get('origin');
+  if (!origin || !allowedOrigins.includes(origin)) return null;
+
+  return {
+  'Access-Control-Allow-Origin': origin,
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
-  'Access-Control-Allow-Headers': '*',
+  'Access-Control-Allow-Headers': 'Authorization, Content-Type',
   'Access-Control-Allow-Credentials': 'true',
-};
+  };
+}
 
 // Path looks like a file if the last segment has a known extension (middleware can't use fs)
 const FILE_EXTENSIONS = new Set([
@@ -35,9 +45,10 @@ export function middleware(request: NextRequest) {
 
     // CORS for API routes - allow anywhere
     if (pathname.startsWith('/api')) {
+        const corsHeaders = getCorsHeaders(request);
         if (request.method === 'OPTIONS') {
             return new NextResponse(null, {
-                headers: corsHeaders,
+                headers: corsHeaders || undefined,
             });
         }
         // Rewrite trailing slash so Next.js doesn't send 308 (CORS blocks that redirect)
@@ -45,15 +56,19 @@ export function middleware(request: NextRequest) {
             const url = request.nextUrl.clone();
             url.pathname = pathname.slice(0, -1);
             const response = NextResponse.rewrite(url);
-            Object.entries(corsHeaders).forEach(([key, value]) => {
-                response.headers.set(key, value);
-            });
+            if (corsHeaders) {
+                Object.entries(corsHeaders).forEach(([key, value]) => {
+                    response.headers.set(key, value);
+                });
+            }
             return response;
         }
         const response = NextResponse.next();
-        Object.entries(corsHeaders).forEach(([key, value]) => {
-            response.headers.set(key, value);
-        });
+        if (corsHeaders) {
+            Object.entries(corsHeaders).forEach(([key, value]) => {
+                response.headers.set(key, value);
+            });
+        }
         return response;
     }
 
