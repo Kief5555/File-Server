@@ -174,13 +174,13 @@
 .explorer-view-actions .file-filter { display: inline-flex; height: 36px; font-size: 12px; color: var(--muted-foreground); }
 .file-surface { flex: 1; min-height: 0; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
 .file-surface[data-layout="list"] { padding: 0 22px; }
-.file-table-heading { position: sticky; top: 0; z-index: 5; display: grid; grid-template-columns: minmax(0,1fr) 120px 70px 80px 36px; gap: 12px; padding: 14px 0 13px; background: var(--card); color: var(--muted-foreground); font-size: 11px; font-weight: 500; border-bottom: 1px solid var(--border); }
+.file-table-heading { position: sticky; top: 0; z-index: 5; display: grid; grid-template-columns: minmax(0,1fr) 120px 70px 80px 36px; gap: 12px; padding: 14px 10px 13px; background: var(--card); color: var(--muted-foreground); font-size: 11px; font-weight: 500; border-bottom: 1px solid var(--border); }
 .file-table-heading > span:first-child { padding-left: 56px; }
 .file-table-heading > span:nth-child(4) { text-align: right; }
 .file-entry { position: relative; min-width: 0; }
-.file-surface[data-layout="list"] .file-entry { display: flex; align-items: center; min-height: 64px; border-bottom: 1px solid color-mix(in srgb,var(--border) 65%,transparent); }
+.file-surface[data-layout="list"] .file-entry { display: flex; align-items: center; min-height: 64px; padding: 0 10px; border-radius: 10px; border-bottom: 1px solid color-mix(in srgb,var(--border) 65%,transparent); }
 .file-surface[data-layout="list"] .file-entry:last-child { border-bottom: 0; }
-.file-surface[data-layout="list"] .file-entry:hover { background: color-mix(in srgb,var(--accent) 45%,transparent); }
+.file-surface[data-layout="list"] .file-entry:is(:hover,:focus-within) { background: color-mix(in srgb,var(--accent) 45%,transparent); }
 .file-entry-link { min-width: 0; }
 .file-surface[data-layout="list"] .file-entry-link { flex: 1; display: grid; grid-template-columns: 44px minmax(0,1fr) 120px 70px 80px; gap: 12px; align-items: center; min-height: 64px; }
 .file-type-icon { display: inline-grid; place-items: center; flex-shrink: 0; width: 42px; height: 44px; border-radius: 12px; color: #526eae; background: #edf2fe; }
