@@ -24,6 +24,14 @@ for (const extension of ['opus', 'oga']) extensionIcons.set(extension, 'audio');
 for (const extension of ['bz2', 'xz', 'zst']) extensionIcons.set(extension, 'archive');
 for (const extension of ['msix', 'xapk', 'dmg', 'pkg', 'deb', 'rpm']) extensionIcons.set(extension, 'exe');
 
+// Prefer Finder artwork; keep Fluent icons for Office and Windows-specific files.
+const finderIcons: Record<string, string> = {
+    folder: 'folder', genericfile: 'generic', photo: 'image', video: 'video', audio: 'audio',
+    code: 'code', txt: 'txt', html: 'code', xml: 'code', vector: 'image',
+    archive: 'archive', zip: 'archive', font: 'font', pdf: 'pdf',
+};
+const applePackages: Record<string, string> = { ipa: 'ipa', dmg: 'dmg', sparseimage: 'dmg', sparsebundle: 'dmg', pkg: 'pkg', mpkg: 'pkg', app: 'application' };
+
 export function filePresentation(file: FileItem) {
     const extension = file.name.includes('.') ? file.name.split('.').pop()!.toLowerCase() : '';
     let icon = file.isDirectory ? 'folder' : extensionIcons.get(extension);
@@ -41,5 +49,7 @@ export function filePresentation(file: FileItem) {
     }
     icon ||= 'genericfile';
     const label = file.isDirectory ? 'Folder' : extension && extension.length <= 7 ? extension.toUpperCase() : 'File';
-    return { iconSrc: `/icons/file-types/${icon}.svg`, kind: icon, label };
+    const finderIcon = file.isDirectory ? 'folder' : applePackages[extension] || finderIcons[icon];
+    const iconSrc = finderIcon ? `/icons/file-types/macos/${finderIcon}.png` : `/icons/file-types/${icon}.svg`;
+    return { iconSrc, kind: finderIcon || icon, label };
 }
