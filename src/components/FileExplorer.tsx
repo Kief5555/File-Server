@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo, useDeferredValue } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { Folder, File, Image as ImageIcon, MoreVertical, Trash, Edit, Upload, Grid, List as ListIcon, Loader2, Download, Share2, Lock, Search, Eye, EyeOff, Filter, Play, Pause, RefreshCw, X, ChevronLeft, ChevronRight, FolderPlus, Globe2, ArrowDownUp, ChevronDown, ArrowUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1006,7 +1007,6 @@ export default function FileExplorer({
                         {visibleFiles.map((file) => {
                             const fileLink = getFilesUrl(currentPath, file.name);
                             const presentation = filePresentation(file);
-                            const FileIcon = presentation.icon;
 
                             const isPreviewable = previewsEnabled && !file.isDirectory && (file.size ?? 0) <= PREVIEW_MAX_SIZE_BYTES && (
                                 file.mimetype.startsWith("image/") ||
@@ -1027,7 +1027,7 @@ export default function FileExplorer({
                                     onMouseLeave={handleFileMouseLeave}
                                 >
                                     <FileLink directory={file.isDirectory} href={fileLink} className="file-entry-link">
-                                        <span className="file-type-icon" aria-hidden="true"><FileIcon /></span>
+                                        <span className="file-type-icon" aria-hidden="true"><Image src={presentation.iconSrc} width={48} height={48} alt="" unoptimized /></span>
                                         <span className="file-entry-name">
                                             <span className="file-name" title={file.name}>{file.name}</span>
                                             <span className="file-mobile-meta">{file.isDirectory ? 'Folder' : formatFileSize(file.size)}<span>·</span><time dateTime={file.modified} title={file.modified}>{formatModifiedDate(file.modified)}</time></span>

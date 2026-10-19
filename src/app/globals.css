@@ -183,21 +183,8 @@
 .file-surface[data-layout="list"] .file-entry:is(:hover,:focus-within) { background: color-mix(in srgb,var(--accent) 45%,transparent); }
 .file-entry-link { min-width: 0; }
 .file-surface[data-layout="list"] .file-entry-link { flex: 1; display: grid; grid-template-columns: 44px minmax(0,1fr) 120px 70px 80px; gap: 12px; align-items: center; min-height: 64px; }
-.file-type-icon { display: inline-grid; place-items: center; flex-shrink: 0; width: 42px; height: 44px; border-radius: 12px; color: #526eae; background: #edf2fe; }
-.file-type-icon svg { width: 23px; height: 23px; stroke-width: 1.6; }
-.file-entry[data-kind="folder"] .file-type-icon { color: #936018; background: #fff4dc; }
-.file-entry[data-kind="image"] .file-type-icon { color: #317660; background: #e7f5ef; }
-.file-entry[data-kind="video"] .file-type-icon { color: #8254b0; background: #f1eafa; }
-.file-entry[data-kind="audio"] .file-type-icon { color: #a0516f; background: #fbeaf1; }
-.file-entry[data-kind="archive"] .file-type-icon { color: #997033; background: #f9efdf; }
-.file-entry[data-kind="code"] .file-type-icon { color: #35798b; background: #e7f3f6; }
-.dark .file-type-icon { color: #adc3ff; background: #243656; }
-.dark .file-entry[data-kind="folder"] .file-type-icon { color: #efc374; background: #352b1f; }
-.dark .file-entry[data-kind="image"] .file-type-icon { color: #85d0b4; background: #193b35; }
-.dark .file-entry[data-kind="video"] .file-type-icon { color: #c6a4f0; background: #352747; }
-.dark .file-entry[data-kind="audio"] .file-type-icon { color: #efacc5; background: #412939; }
-.dark .file-entry[data-kind="archive"] .file-type-icon { color: #dec092; background: #382f25; }
-.dark .file-entry[data-kind="code"] .file-type-icon { color: #88cbdc; background: #1e3541; }
+.file-type-icon { display: inline-grid; place-items: center; flex-shrink: 0; width: 42px; height: 44px; }
+.file-type-icon img { display: block; width: 40px; height: 40px; object-fit: contain; }
 .file-entry-name { display: block; min-width: 0; }
 .file-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 550; letter-spacing: -0.1px; }
 .file-mobile-meta { display: none; }
@@ -212,7 +199,7 @@
 .file-surface[data-layout="grid"] .file-entry:hover { border-color: var(--ring); background: color-mix(in srgb,var(--accent) 18%,var(--card)); }
 .file-surface[data-layout="grid"] .file-entry-link { display: flex; flex-direction: column; align-items: flex-start; height: 100%; padding: 19px 17px 14px; }
 .file-surface[data-layout="grid"] .file-type-icon { width: 48px; height: 49px; border-radius: 13px; margin-bottom: 18px; }
-.file-surface[data-layout="grid"] .file-type-icon svg { width: 26px; height: 26px; }
+.file-surface[data-layout="grid"] .file-type-icon img { width: 48px; height: 48px; }
 .file-surface[data-layout="grid"] .file-entry-name { width: 100%; }
 .file-surface[data-layout="grid"] .file-modified,.file-surface[data-layout="grid"] .file-type-label,.file-surface[data-layout="grid"] .file-size { display: none; }
 .file-surface[data-layout="grid"] .file-entry-actions { position: absolute; top: 12px; right: 10px; margin: 0; }
@@ -255,7 +242,8 @@
   .file-table-heading { display: none; }
   .file-surface[data-layout="list"] { padding: 0 15px; }
   .file-surface[data-layout="list"] .file-entry-link { grid-template-columns: 40px minmax(0,1fr); gap: 11px; min-height: 76px; }
-  .file-type-icon { width: 38px; height: 41px; border-radius: 11px; }
+  .file-type-icon { width: 38px; height: 41px; }
+  .file-type-icon img { width: 36px; height: 36px; }
   .file-name { font-size: 13px; }
   .file-mobile-meta { display: flex; gap: 6px; margin-top: 5px; align-items: center; font-size: 11px; color: var(--muted-foreground); }
   .file-surface[data-layout="grid"] .file-mobile-meta { display: none; }
@@ -266,6 +254,7 @@
   .file-surface[data-layout="grid"] .file-entry { height: 164px; border-radius: 12px; }
   .file-surface[data-layout="grid"] .file-entry-link { padding: 16px 12px 12px; }
   .file-surface[data-layout="grid"] .file-type-icon { width: 43px; height: 44px; margin-bottom: 15px; }
+  .file-surface[data-layout="grid"] .file-type-icon img { width: 43px; height: 43px; }
   .file-surface[data-layout="grid"] .file-entry-actions { top: 6px; right: 4px; }
   .file-surface[data-layout="grid"] .file-card-meta { font-size: 10px; }
   .explorer-footer { padding: 12px 16px; font-size: 10px; }

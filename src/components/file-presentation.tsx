@@ -1,5 +1,6 @@
-import { Archive, File, FileCode2, FileText, Folder, Image as ImageIcon, Film, Music } from 'lucide-react';
+import { File, FileText, Folder, Image as ImageIcon, Film, Music } from 'lucide-react';
 import type { FileItem } from '@/lib/directory';
+import iconExtensions from '@/lib/file-icon-extensions.json';
 
 export const fileFilters = [
     { id: 'all', label: 'All items', icon: File },
@@ -11,13 +12,34 @@ export const fileFilters = [
 ] as const;
 export type FileFilter = typeof fileFilters[number]['id'];
 
+// Keep extension aliases in the same catalog as the bundled Fluent SVGs.
+const extensionIcons = new Map<string, string>();
+for (const [icon, extensions] of Object.entries(iconExtensions)) {
+    for (const extension of extensions) extensionIcons.set(extension, icon);
+}
+for (const extension of ['ts', 'tsx', 'mts', 'cts', 'mjs', 'cjs', 'yml', 'yaml']) extensionIcons.set(extension, 'code');
+for (const extension of ['csv', 'tsv', 'ods']) extensionIcons.set(extension, 'xlsx');
+for (const extension of ['webp', 'avif']) extensionIcons.set(extension, 'photo');
+for (const extension of ['opus', 'oga']) extensionIcons.set(extension, 'audio');
+for (const extension of ['bz2', 'xz', 'zst']) extensionIcons.set(extension, 'archive');
+for (const extension of ['msix', 'xapk', 'dmg', 'pkg', 'deb', 'rpm']) extensionIcons.set(extension, 'exe');
+
 export function filePresentation(file: FileItem) {
-    const extension = file.name.includes('.') ? file.name.split('.').pop()!.toUpperCase() : '';
-    if (file.isDirectory) return { icon: Folder, kind: 'folder', label: 'Folder' };
-    if (file.mimetype.startsWith('image/')) return { icon: ImageIcon, kind: 'image', label: extension || 'Image' };
-    if (file.mimetype.startsWith('video/') || /\.(mov|mp4)$/i.test(file.name)) return { icon: Film, kind: 'video', label: extension || 'Video' };
-    if (file.mimetype.startsWith('audio/')) return { icon: Music, kind: 'audio', label: extension || 'Audio' };
-    if (/\.(zip|rar|7z|gz|tar|bz2)$/i.test(file.name)) return { icon: Archive, kind: 'archive', label: extension };
-    if (/\.(json|js|ts|tsx|jsx|html|css|py|sh|xml|yaml|yml)$/i.test(file.name)) return { icon: FileCode2, kind: 'code', label: extension };
-    return { icon: FileText, kind: 'document', label: extension.length <= 7 && extension ? extension : 'File' };
+    const extension = file.name.includes('.') ? file.name.split('.').pop()!.toLowerCase() : '';
+    let icon = file.isDirectory ? 'folder' : extensionIcons.get(extension);
+    if (!file.isDirectory) {
+        if (file.mimetype.startsWith('image/') && extension !== 'svg') icon = 'photo';
+        else if (file.mimetype.startsWith('video/')) icon = 'video';
+        else if (file.mimetype.startsWith('audio/')) icon = 'audio';
+        if (!icon) {
+            if (file.mimetype === 'application/pdf') icon = 'pdf';
+            else if (/spreadsheet|excel/.test(file.mimetype)) icon = 'xlsx';
+            else if (/presentation|powerpoint/.test(file.mimetype)) icon = 'pptx';
+            else if (/wordprocessing|msword/.test(file.mimetype)) icon = 'docx';
+            else if (file.mimetype.startsWith('text/')) icon = 'txt';
+        }
+    }
+    icon ||= 'genericfile';
+    const label = file.isDirectory ? 'Folder' : extension && extension.length <= 7 ? extension.toUpperCase() : 'File';
+    return { iconSrc: `/icons/file-types/${icon}.svg`, kind: icon, label };
 }
