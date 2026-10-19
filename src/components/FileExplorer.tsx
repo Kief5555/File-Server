@@ -27,6 +27,7 @@ import { useRouter } from "next/navigation";
 
 import type { FileItem } from "@/lib/directory";
 import { uploadFile } from "@/lib/uploads";
+import { formatModifiedDate } from "@/lib/file-format";
 
 // Stable component identity keeps links mounted during preview and progress updates.
 function FileLink({ directory, href, children, className }: {
@@ -62,7 +63,7 @@ const formatTime = (time: number) => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
-const fileNameCollator = new Intl.Collator(undefined, { numeric: true });
+const fileNameCollator = new Intl.Collator("en", { numeric: true });
 
 const PREVIEW_MAX_SIZE_BYTES = 200 * 1024 * 1024; 
 const PREVIEW_HOVER_DELAY_MS = 450; // Delay before showing preview to avoid loading on quick hovers
@@ -1146,7 +1147,7 @@ export default function FileExplorer({
 
                                             <div className={cn("min-w-0 text-foreground", viewMode === "list" && "text-left flex-1")}>
                                                 <p className="text-xs sm:text-sm font-medium truncate w-full">{file.name}</p>
-                                                {viewMode === "list" && <p className="text-[10px] sm:text-xs text-muted-foreground">{formatFileSize(file.size)} • {new Date(file.modified).toLocaleDateString()}</p>}
+                                                {viewMode === "list" && <p className="text-[10px] sm:text-xs text-muted-foreground">{formatFileSize(file.size)} • <time dateTime={file.modified} title={file.modified}>{formatModifiedDate(file.modified)}</time></p>}
                                             </div>
                                         </FileLink>
                                     </div>
@@ -1191,7 +1192,7 @@ export default function FileExplorer({
                 )}
 
                 {!error && files.length > 0 && <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground" aria-live="polite">
-                    <span>{filteredAndSortedFiles.length.toLocaleString()} of {files.length.toLocaleString()} items{canUpload ? " · Drop files to upload" : ""}</span>
+                    <span>{filteredAndSortedFiles.length.toLocaleString("en-US")} of {files.length.toLocaleString("en-US")} items{canUpload ? " · Drop files to upload" : ""}</span>
                     {pageCount > 1 && <div className="flex items-center gap-2">
                         <Button variant="outline" size="sm" aria-label="Previous page" disabled={currentPage === 0} onClick={() => { setPage(currentPage - 1); closePreview(); }}><ChevronLeft className="h-4 w-4" /></Button>
                         <span>Page {currentPage + 1} of {pageCount}</span>

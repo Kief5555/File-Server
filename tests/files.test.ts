@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import { formatModifiedDate } from '../src/lib/file-format';
 import { readDirectory } from '../src/lib/directory';
 import { prepareUpload, writeChunk, mergeUpload, type UploadMetadata } from '../src/lib/upload-store';
 import { serveFileWithRangeSupport } from '../src/lib/fileResponses';
@@ -90,3 +91,20 @@ test('streamed responses handle ranges, validators, HEAD, unsafe types and Unico
     assert.match(unsafe.headers.get('content-disposition')!, /^attachment/);
     await unsafe.body?.cancel();
 }));
+
+// This UTC timestamp falls on the previous calendar day in Vancouver.
+// The first server/client render must agree regardless of the host time zone.
+test('modified dates match across server and browser time zones', () => {
+    const previous = process.env.TZ;
+    try {
+        process.env.TZ = 'UTC';
+        const server = formatModifiedDate('2026-06-25T02:14:03.000Z');
+        process.env.TZ = 'America/Vancouver';
+        const browser = formatModifiedDate('2026-06-25T02:14:03.000Z');
+        assert.equal(server, 'Jun 25, 2026');
+        assert.equal(browser, server);
+    } finally {
+        if (previous === undefined) delete process.env.TZ;
+        else process.env.TZ = previous;
+    }
+});
