@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo, useDeferredValue } from "react";
 import Link from "next/link";
-import { Folder, File, FileText, Image as ImageIcon, Film, MoreVertical, Trash, Edit, Upload, Grid, List as ListIcon, Loader2, Download, Share2, Lock, ArrowUp, Search, Eye, EyeOff, Filter, Music, Play, Pause, RefreshCw, X, ChevronLeft, ChevronRight, FolderPlus } from "lucide-react";
+import { Folder, File, Image as ImageIcon, MoreVertical, Trash, Edit, Upload, Grid, List as ListIcon, Loader2, Download, Share2, Lock, Search, Eye, EyeOff, Filter, Play, Pause, RefreshCw, X, ChevronLeft, ChevronRight, FolderPlus, Globe2, ArrowDownUp, ChevronDown, ArrowUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -28,6 +28,7 @@ import { useRouter } from "next/navigation";
 import type { FileItem } from "@/lib/directory";
 import { uploadFile } from "@/lib/uploads";
 import { formatModifiedDate } from "@/lib/file-format";
+import { fileFilters, filePresentation, type FileFilter } from "@/components/file-presentation";
 
 // Stable component identity keeps links mounted during preview and progress updates.
 function FileLink({ directory, href, children, className }: {
@@ -466,7 +467,7 @@ export default function FileExplorer({
     const [sortMethod, setSortMethod] = useState<"name" | "date" | "size">("name");
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
     const [searchQuery, setSearchQuery] = useState("");
-    const [filterType, setFilterType] = useState<"all" | "images" | "videos" | "audio" | "documents" | "folders">("all");
+    const [filterType, setFilterType] = useState<FileFilter>("all");
     const [previewsEnabled, setPreviewsEnabled] = useState(true);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const router = useRouter();
@@ -680,6 +681,7 @@ export default function FileExplorer({
             // Type filter
             if (filterType === "all") return true;
             if (filterType === "folders") return file.isDirectory;
+            if (file.isDirectory) return false;
             if (filterType === "images") return file.mimetype.startsWith("image/");
             if (filterType === "videos") return file.mimetype.startsWith("video/") || file.name.toLowerCase().endsWith('.mov');
             if (filterType === "audio") return file.mimetype.startsWith("audio/");
@@ -900,187 +902,73 @@ export default function FileExplorer({
         }
     };
 
-    // Helper to get icon - minimal style, smaller on mobile
-    const getFileIcon = (mimetype: string) => {
-        const iconClass = "h-8 w-8 sm:h-10 sm:w-10 text-muted-foreground";
-        if (mimetype.startsWith("image/")) return <ImageIcon className={iconClass} />;
-        if (mimetype.startsWith("video/")) return <Film className={iconClass} />;
-        if (mimetype.startsWith("audio/")) return <Music className={iconClass} />;
-        return <FileText className={iconClass} />;
-    };
+    const selectFilter = (filter: FileFilter) => { setFilterType(filter); setPage(0); closePreview(); };
 
     return (
         <>
             <div
-                className={cn("relative flex flex-col gap-2 sm:gap-4 h-full", dragging && "outline-2 outline-dashed outline-primary outline-offset-4")}
+                className={cn("explorer-layout", dragging && "is-dragging")}
                 onDragOver={event => { if (canUpload && !uploading && !error && event.dataTransfer.types.includes("Files")) { event.preventDefault(); setDragging(true); } }}
                 onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragging(false); }}
                 onDrop={event => { event.preventDefault(); setDragging(false); void uploadFiles(Array.from(event.dataTransfer.files)); }}
             >
-                {dragging && <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-lg bg-background/90 text-lg font-medium">Drop files to upload</div>}
-                {/* Toolbar - compact on mobile */}
-                <div className="flex flex-col gap-2 sm:gap-3 bg-card p-2 sm:p-4 rounded-lg border shadow-sm">
-                    {/* Top row - Navigation and actions */}
-                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 justify-between items-start sm:items-center">
-                        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-                            {/* Back Button */}
-                            {isAtRoot ? (
-                                <Button variant="ghost" size="icon" disabled className="opacity-50 h-8 w-8 sm:h-9 sm:w-9 shrink-0">
-                                    <ArrowUp className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                </Button>
-                            ) : (
-                                <Link href={getFilesUrl(currentPath.split('/').slice(0, -1).join('/') || 'public')} passHref>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-9 sm:w-9 shrink-0">
-                                        <ArrowUp className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                    </Button>
-                                </Link>
-                            )}
-                            <div className="flex items-center gap-1 text-xs sm:text-sm text-muted-foreground bg-muted px-2 py-1 sm:px-3 sm:py-1.5 rounded-md min-w-0">
-                                <span className="font-semibold text-foreground truncate">/{currentPath}</span>
-                            </div>
+                {dragging && <div className="file-drop-overlay">Drop files to upload</div>}
+                <section className="explorer-main" aria-label="File explorer">
+                <div className="explorer-heading">
+                    <div className="explorer-path-row">
+                        <div className="explorer-path-navigation">
+                            {isAtRoot ? <Button variant="ghost" size="icon" disabled aria-label="Up one folder"><ArrowUp /></Button> : <Button asChild variant="ghost" size="icon"><Link prefetch={false} href={getFilesUrl(currentPath.split('/').slice(0, -1).join('/'))} aria-label="Up one folder"><ArrowUp /></Link></Button>}
+                            <nav aria-label="Folder path" className="file-breadcrumbs">
+                                {currentPath.split('/').map((segment, index, segments) => <span key={index}>
+                                    <span aria-hidden="true" className="path-separator">/</span>
+                                    {index === segments.length - 1 ? <span aria-current="page">{segment}</span> : <Link prefetch={false} href={getFilesUrl(segments.slice(0, index + 1).join('/'))}>{segment}</Link>}
+                                </span>)}
+                            </nav>
                         </div>
-
-                        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                            {isLoggedIn && (
-                                <div className="flex items-center border rounded-md overflow-hidden">
-                                    <button
-                                        onClick={() => handleRootSwitch("public")}
-                                        className={cn("px-2 py-1 text-xs sm:px-3 sm:py-1.5 sm:text-sm", currentPath.startsWith("public") ? "bg-primary text-primary-foreground" : "hover:bg-muted")}
-                                    >
-                                        Public
-                                    </button>
-                                    <button
-                                        onClick={() => handleRootSwitch("private")}
-                                        className={cn("px-2 py-1 text-xs sm:px-3 sm:py-1.5 sm:text-sm flex items-center gap-0.5 sm:gap-1", currentPath.startsWith("private") ? "bg-primary text-primary-foreground" : "hover:bg-muted")}
-                                    >
-                                        <Lock className="h-2.5 w-2.5 sm:h-3 sm:w-3" /> Private
-                                    </button>
-                                </div>
-                            )}
-
-                            <div className="flex items-center border rounded-md overflow-hidden">
-                                <Button variant={viewMode === "grid" ? "secondary" : "ghost"} size="icon" className="rounded-none h-8 w-8 sm:h-9 sm:w-9" aria-label="Grid view" onClick={() => { setViewMode("grid"); savePreferences({ view: "grid" }); }}>
-                                    <Grid className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                </Button>
-                                <Button variant={viewMode === "list" ? "secondary" : "ghost"} size="icon" className="rounded-none h-8 w-8 sm:h-9 sm:w-9" aria-label="List view" onClick={() => { setViewMode("list"); savePreferences({ view: "list" }); }}>
-                                    <ListIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                </Button>
-                            </div>
-
-                            {/* Preview Toggle */}
-                            <Button
-                                variant={previewsEnabled ? "secondary" : "ghost"}
-                                size="icon"
-                                className="hidden md:inline-flex h-8 w-8 sm:h-9 sm:w-9"
-                                onClick={handleTogglePreviews}
-                                title={previewsEnabled ? "Disable previews" : "Enable previews"}
-                            >
-                                {previewsEnabled ? <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> : <EyeOff className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
-                            </Button>
-
-                            {/* Sort Menu */}
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="sm" className="h-8 px-2 text-xs sm:h-9 sm:px-3 sm:text-sm">
-                                        Sort
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                    <DropdownMenuLabel>Sort By</DropdownMenuLabel>
-                                    <DropdownMenuItem onClick={() => { setSortMethod("name"); savePreferences({ sort: "name" }); }}>
-                                        Name {sortMethod === "name" && "✓"}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => { setSortMethod("date"); savePreferences({ sort: "date" }); }}>
-                                        Date {sortMethod === "date" && "✓"}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => { setSortMethod("size"); savePreferences({ sort: "size" }); }}>
-                                        Size {sortMethod === "size" && "✓"}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuLabel>Order</DropdownMenuLabel>
-                                    <DropdownMenuItem onClick={() => { setSortOrder("asc"); savePreferences({ order: "asc" }); }}>
-                                        Ascending {sortOrder === "asc" && "✓"}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => { setSortOrder("desc"); savePreferences({ order: "desc" }); }}>
-                                        Descending {sortOrder === "desc" && "✓"}
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-
-                            {canUpload && <Button variant="outline" size="sm" disabled={!!error} onClick={() => setFolderDialogOpen(true)}><FolderPlus className="mr-1 h-4 w-4" /> New folder</Button>}
-                            <Button variant="ghost" size="icon" aria-label="Refresh files" title="Refresh files" disabled={loading || !!error} onClick={() => void fetchFiles(currentPath)}>
-                                <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-                            </Button>
-                            {uploading && <Button variant="outline" size="sm" onClick={() => uploadController.current?.abort()}><X className="mr-1 h-4 w-4" /> Cancel upload</Button>}
-                            <Button
-                                disabled={!canUpload || uploading || !!error}
-                                variant={!canUpload ? "outline" : "default"}
-                                size="sm"
-                                className={cn("h-8 px-2 text-xs sm:h-9 sm:px-3 sm:text-sm", !canUpload && "opacity-50 cursor-not-allowed")}
-                                onClick={() => fileInputRef.current?.click()}
-                            >
-                                <Upload className="mr-1.5 h-3.5 w-3.5 sm:mr-2 sm:h-4 sm:w-4" /> Upload
-                            </Button>
-                            <input
-                                type="file"
-                                multiple
-                                ref={fileInputRef}
-                                className="hidden"
-                                onChange={handleUpload}
-                            />
+                        <div className="explorer-primary-actions">
+                            {canUpload && <Button variant="outline" className="explorer-action" disabled={!!error} onClick={() => setFolderDialogOpen(true)}><FolderPlus /><span>New folder</span></Button>}
+                            {uploading ? <Button variant="outline" className="explorer-action" onClick={() => uploadController.current?.abort()}><X />Cancel upload</Button> : <Button className="explorer-action upload-button" disabled={!canUpload || !!error} title={!isLoggedIn ? 'Sign in to upload files' : !canUpload ? 'Upload permission required' : 'Upload files'} onClick={() => fileInputRef.current?.click()}><Upload /><span>Upload files</span></Button>}
+                            <input type="file" multiple ref={fileInputRef} className="hidden" onChange={handleUpload} />
                         </div>
                     </div>
-
-                    {/* Bottom row - Search and filters */}
-                    <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-2">
-                        <div className="relative flex-1 min-w-0">
-                            <Search className="absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
-                            <Input
-                                ref={searchInputRef}
-                                aria-label="Search files"
-                                placeholder="Search files… ( / )"
-                                value={searchQuery}
-                                onChange={(e) => { setSearchQuery(e.target.value); setPage(0); }}
-                                className="pl-8 h-8 sm:pl-9 sm:h-9 text-sm"
-                            />
-                        </div>
+                </div>
+                <div className="explorer-toolbar">
+                    <div className="file-spaces" aria-label="File spaces">
+                        <button aria-pressed={currentPath.split('/')[0] === 'public'} onClick={() => handleRootSwitch('public')}><Globe2 /><span>Public</span></button>
+                        <button aria-pressed={currentPath.split('/')[0] === 'private'} onClick={() => handleRootSwitch('private')}><Lock /><span>Private</span></button>
+                    </div>
+                    <div className="explorer-search">
+                        <Search aria-hidden="true" className="search-icon" />
+                        <Input ref={searchInputRef} aria-label="Search files" placeholder="Search files…" value={searchQuery} onChange={event => { setSearchQuery(event.target.value); setPage(0); }} />
+                        {searchQuery ? <button aria-label="Clear search" onClick={() => { setSearchQuery(''); setPage(0); searchInputRef.current?.focus(); }}><X /></button> : <kbd aria-hidden="true">/</kbd>}
+                    </div>
+                    <div className="explorer-view-actions">
                         <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="sm" className="gap-1.5 h-8 px-2 text-xs sm:h-9 sm:px-3 sm:text-sm">
-                                    <Filter className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                    <span className="truncate">{filterType === "all" ? "All" : filterType.charAt(0).toUpperCase() + filterType.slice(1)}</span>
-                                </Button>
-                            </DropdownMenuTrigger>
+                            <DropdownMenuTrigger asChild><Button variant="ghost" className="file-filter" data-active={filterType !== "all"} aria-label="Filter by file type"><Filter /><span>{fileFilters.find(item => item.id === filterType)?.label}</span></Button></DropdownMenuTrigger>
+                            <DropdownMenuContent align="end"><DropdownMenuLabel>File type</DropdownMenuLabel>{fileFilters.map(item => <DropdownMenuItem key={item.id} onClick={() => selectFilter(item.id)}><item.icon className="mr-2 h-4 w-4" />{item.label}{filterType === item.id && ' ✓'}</DropdownMenuItem>)}</DropdownMenuContent>
+                        </DropdownMenu>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild><Button variant="ghost" className="toolbar-sort"><ArrowDownUp /><span>Sort</span><ChevronDown className="h-3 w-3" /></Button></DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                                <DropdownMenuLabel>Filter by Type</DropdownMenuLabel>
-                                <DropdownMenuItem onClick={() => { setPage(0); setFilterType("all"); }}>
-                                    <File className="mr-2 h-4 w-4" /> All Files {filterType === "all" && "✓"}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => { setPage(0); setFilterType("folders"); }}>
-                                    <Folder className="mr-2 h-4 w-4" /> Folders {filterType === "folders" && "✓"}
-                                </DropdownMenuItem>
+                                <DropdownMenuLabel>Sort by</DropdownMenuLabel>
+                                {(['name', 'date', 'size'] as const).map(method => <DropdownMenuItem key={method} onClick={() => { setSortMethod(method); savePreferences({ sort: method }); }}>{method.charAt(0).toUpperCase() + method.slice(1)}{sortMethod === method && ' ✓'}</DropdownMenuItem>)}
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => { setPage(0); setFilterType("images"); }}>
-                                    <ImageIcon className="mr-2 h-4 w-4" /> Images {filterType === "images" && "✓"}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => { setPage(0); setFilterType("videos"); }}>
-                                    <Film className="mr-2 h-4 w-4" /> Videos {filterType === "videos" && "✓"}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => { setPage(0); setFilterType("audio"); }}>
-                                    <Music className="mr-2 h-4 w-4" /> Audio {filterType === "audio" && "✓"}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => { setPage(0); setFilterType("documents"); }}>
-                                    <FileText className="mr-2 h-4 w-4" /> Documents {filterType === "documents" && "✓"}
-                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => { setSortOrder('asc'); savePreferences({ order: 'asc' }); }}>Ascending {sortOrder === 'asc' && '✓'}</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => { setSortOrder('desc'); savePreferences({ order: 'desc' }); }}>Descending {sortOrder === 'desc' && '✓'}</DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
+                        <Button variant="ghost" size="icon" className="toolbar-icon" aria-label="Refresh files" title="Refresh files" disabled={loading || !!error} onClick={() => void fetchFiles(currentPath)}><RefreshCw className={cn(loading && 'animate-spin')} /></Button>
+                        <Button variant="ghost" size="icon" className="toolbar-icon preview-toggle" aria-label={previewsEnabled ? 'Disable previews' : 'Enable previews'} title={previewsEnabled ? 'Disable previews' : 'Enable previews'} onClick={handleTogglePreviews}>{previewsEnabled ? <Eye /> : <EyeOff />}</Button>
+                        <div className="view-switch" aria-label="File layout">
+                            <Button variant="ghost" size="icon" aria-label="List view" aria-pressed={viewMode === 'list'} onClick={() => { setViewMode('list'); savePreferences({ view: 'list' }); }}><ListIcon /></Button>
+                            <Button variant="ghost" size="icon" aria-label="Grid view" aria-pressed={viewMode === 'grid'} onClick={() => { setViewMode('grid'); savePreferences({ view: 'grid' }); }}><Grid /></Button>
+                        </div>
                     </div>
                 </div>
 
-
                 {/* File Area */}
                 {error ? (
-                    <div className="flex-1 flex flex-col items-center justify-center gap-4">
+                    <div className="explorer-empty">
                         <div className="text-center">
                             <p className="text-destructive text-lg font-semibold mb-2">{error}</p>
                             {errorType === "no_permissions" && (
@@ -1089,30 +977,36 @@ export default function FileExplorer({
                         </div>
                     </div>
                 ) : loading && files.length === 0 ? (
-                    <div className="flex-1 flex items-center justify-center">
+                    <div className="explorer-empty">
                         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                     </div>
                 ) : files.length === 0 ? (
-                    <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
-                        <Folder className="h-16 w-16 mb-4 opacity-50" />
-                        <p>Directory is empty</p>
+                    <div className="explorer-empty">
+                        <span className="empty-icon"><Folder /></span>
+                        <h3>This folder is empty.</h3>
+                        <p>{canUpload ? 'Drop your first files here, or create a folder to get started.' : 'There are no files in this folder yet.'}</p>
+                        {canUpload && <Button variant="outline" onClick={() => fileInputRef.current?.click()}><Upload className="h-4 w-4" />Upload files</Button>}
                     </div>
                 ) : filteredAndSortedFiles.length === 0 ? (
-                    <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
-                        <Search className="h-16 w-16 mb-4 opacity-50" />
-                        <p>No files match your search</p>
+                    <div className="explorer-empty">
+                        <span className="empty-icon"><Search /></span>
+                        <h3>No files match your search</h3>
+                        <p>Try another name or clear the file type filter.</p>
                         <Button variant="link" onClick={() => { setSearchQuery(""); setFilterType("all"); }}>
                             Clear filters
                         </Button>
                     </div>
                 ) : (
                     <div
-                        className={cn("flex-1 min-h-0 overflow-auto content-start",
-                            viewMode === "grid" ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 sm:gap-3" : "flex flex-col gap-1.5 sm:gap-2"
-                        )}
+                        className="file-surface"
+                        data-layout={viewMode}
+                        aria-label={viewMode === 'grid' ? 'Files in grid view' : 'Files in list view'}
                     >
+                        {viewMode === 'list' && <div className="file-table-heading" aria-hidden="true"><span>Name</span><span>Modified</span><span>Type</span><span>Size</span><span /></div>}
                         {visibleFiles.map((file) => {
                             const fileLink = getFilesUrl(currentPath, file.name);
+                            const presentation = filePresentation(file);
+                            const FileIcon = presentation.icon;
 
                             const isPreviewable = previewsEnabled && !file.isDirectory && (file.size ?? 0) <= PREVIEW_MAX_SIZE_BYTES && (
                                 file.mimetype.startsWith("image/") ||
@@ -1127,36 +1021,28 @@ export default function FileExplorer({
                             return (
                                 <div
                                     key={file.name}
-                                    className={cn(
-                                        "group relative border rounded-lg hover:bg-muted/50 transition-colors",
-                                        viewMode === "grid" ? "flex flex-col items-center gap-2 sm:gap-3 text-center aspect-[4/5] justify-center" : "flex items-center gap-2 sm:gap-4"
-                                    )}
+                                    className="file-entry group"
+                                    data-kind={presentation.kind}
                                     onMouseEnter={(e) => handleFileMouseEnter(e, file, isPreviewable)}
                                     onMouseLeave={handleFileMouseLeave}
                                 >
-                                    <div className="flex-1 flex w-full h-full items-center cursor-pointer overflow-hidden">
-                                        <FileLink directory={file.isDirectory} href={fileLink} className={cn("flex-1 flex w-full h-full items-center min-w-0", viewMode === "grid" ? "flex-col justify-center p-2 sm:p-4 content-center" : "gap-2 sm:gap-4 p-2 sm:p-3")}>
-                                            {/* Preview/Icon */}
-                                            <div className="relative pointer-events-none shrink-0">
-                                                {file.isDirectory ? (
-                                                    <Folder className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground" />
-                                                ) : (
-                                                    getFileIcon(file.mimetype)
-                                                )}
-                                            </div>
-
-                                            <div className={cn("min-w-0 text-foreground", viewMode === "list" && "text-left flex-1")}>
-                                                <p className="text-xs sm:text-sm font-medium truncate w-full">{file.name}</p>
-                                                {viewMode === "list" && <p className="text-[10px] sm:text-xs text-muted-foreground">{formatFileSize(file.size)} • <time dateTime={file.modified} title={file.modified}>{formatModifiedDate(file.modified)}</time></p>}
-                                            </div>
-                                        </FileLink>
-                                    </div>
+                                    <FileLink directory={file.isDirectory} href={fileLink} className="file-entry-link">
+                                        <span className="file-type-icon" aria-hidden="true"><FileIcon /></span>
+                                        <span className="file-entry-name">
+                                            <span className="file-name" title={file.name}>{file.name}</span>
+                                            <span className="file-mobile-meta">{file.isDirectory ? 'Folder' : formatFileSize(file.size)}<span>·</span><time dateTime={file.modified} title={file.modified}>{formatModifiedDate(file.modified)}</time></span>
+                                        </span>
+                                        <time className="file-modified" dateTime={file.modified} title={file.modified}>{formatModifiedDate(file.modified)}</time>
+                                        <span className="file-type-label">{presentation.label}</span>
+                                        <span className="file-size">{file.isDirectory ? '—' : formatFileSize(file.size)}</span>
+                                        <span className="file-card-meta"><span>{file.isDirectory ? 'Open folder' : formatFileSize(file.size)}</span>{file.isDirectory ? <ChevronRight className="h-3.5 w-3.5" /> : <span className="file-extension">{presentation.label}</span>}</span>
+                                    </FileLink>
 
                                     {/* Actions Menu */}
-                                    <div onClick={(e) => e.stopPropagation()} className="z-10 relative">
+                                    <div onClick={(e) => e.stopPropagation()} className="file-entry-actions">
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
-                                                <Button aria-label={`Actions for ${file.name}`} variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity mr-1 sm:mr-2 shrink-0">
+                                                <Button aria-label={`Actions for ${file.name}`} variant="ghost" size="icon" className="file-menu-button">
                                                     <MoreVertical className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                                 </Button>
                                             </DropdownMenuTrigger>
@@ -1191,7 +1077,7 @@ export default function FileExplorer({
                     </div>
                 )}
 
-                {!error && files.length > 0 && <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground" aria-live="polite">
+                {!error && files.length > 0 && <div className="explorer-footer" aria-live="polite">
                     <span>{filteredAndSortedFiles.length.toLocaleString("en-US")} of {files.length.toLocaleString("en-US")} items{canUpload ? " · Drop files to upload" : ""}</span>
                     {pageCount > 1 && <div className="flex items-center gap-2">
                         <Button variant="outline" size="sm" aria-label="Previous page" disabled={currentPage === 0} onClick={() => { setPage(currentPage - 1); closePreview(); }}><ChevronLeft className="h-4 w-4" /></Button>
@@ -1200,6 +1086,7 @@ export default function FileExplorer({
                     </div>}
                 </div>}
 
+                </section>
                 {/* Dialogs - mobile: contain in viewport, scroll if needed */}
                 <Dialog open={folderDialogOpen} onOpenChange={setFolderDialogOpen}>
                     <DialogContent>

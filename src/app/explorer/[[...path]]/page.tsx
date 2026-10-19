@@ -3,10 +3,12 @@ import { ModeToggle } from "@/components/mode-toggle";
 import { getSession } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { listFiles, type FileItem } from "@/lib/files";
 import LogoutButton from "@/components/LogoutButton";
 import db from "@/lib/db";
+import { Settings2, UserRound, ArrowUpRight } from "lucide-react";
 
 export default async function ExplorerPage(props: { params: Promise<{ path?: string[] }>, searchParams: Promise<{ password?: string }> }) {
     const params = await props.params;
@@ -65,35 +67,22 @@ export default async function ExplorerPage(props: { params: Promise<{ path?: str
     }
 
     return (
-        <div className="flex h-screen flex-col bg-background">
-            <header className="flex h-12 sm:h-16 items-center justify-between border-b px-3 sm:px-6 bg-card">
-                <div className="flex items-center gap-2 min-w-0">
-                    <Link href="/files/public">
-                        <h1 className="text-base sm:text-xl font-bold hover:text-primary transition-colors cursor-pointer truncate">File Server</h1>
-                    </Link>
-                </div>
-                <div className="flex items-center gap-2 sm:gap-4">
+        <div className="file-app-shell">
+            <header className="file-app-header">
+                <Link href="/files/public" className="file-brand">
+                    <Image className="file-brand-mark" src="/icon.ico" width={42} height={42} alt="PrintedWaste" unoptimized />
+                    <span><span className="file-brand-name">File Server<span className="brand-dot">.</span></span><span className="file-brand-byline">PRINTEDWASTE</span></span>
+                </Link>
+                <div className="file-account-actions">
                     <ModeToggle />
-                    {session ? (
-                        <>
-                            <span className="text-sm text-muted-foreground hidden sm:inline-block">Welcome, {session.username}</span>
-                            {isAdmin && (
-                                <Link href="/admin">
-                                    <Button variant="outline" size="sm" className="hidden sm:flex">
-                                        Settings
-                                    </Button>
-                                </Link>
-                            )}
-                            <LogoutButton />
-                        </>
-                    ) : (
-                        <Link href="/login">
-                            <Button size="sm">Login</Button>
-                        </Link>
-                    )}
+                    {session ? <>
+                        <span className="file-account-name"><UserRound aria-hidden="true" />{session.username}</span>
+                        {isAdmin && <Button asChild variant="ghost" className="settings-link"><Link href="/admin" aria-label="Settings"><Settings2 /><span>Settings</span></Link></Button>}
+                        <LogoutButton />
+                    </> : <Button asChild variant="outline" className="sign-in-button"><Link href="/login">Sign in<ArrowUpRight /></Link></Button>}
                 </div>
             </header>
-            <main className="flex-1 min-h-0 overflow-auto p-3 sm:p-6">
+            <main className="file-app-content">
                 <FileExplorer
                     key={pathSegments.join('/')}
                     initialPath={pathSegments.join('/')}
