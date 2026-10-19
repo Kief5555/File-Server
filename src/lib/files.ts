@@ -1,73 +1,104 @@
 import fs from 'fs';
 import fsp from 'fs/promises';
 import path from 'path';
-import mime from 'mime-types';
-import db, { getSetting, getCachedFolderSize, setCachedFolderSize, invalidateFolderSizeCache } from './db';
+import { readDirectory } from './directory';
+export type { FileItem } from './directory';
+import db, { getSetting, invalidateFolderSizeCache } from './db';
 
 export { invalidateFolderSizeCache };
 
-const filesRoot = path.join(process.cwd(), 'files');
+const filesRoot = path.join(/*turbopackIgnore: true*/ process.cwd(), 'files');
 const resolvedFilesRoot = path.resolve(filesRoot);
+
+// Ensure filesRoot includes public/private before computing realpath.
+if (!fs.existsSync(resolvedFilesRoot)) {
+    fs.mkdirSync(resolvedFilesRoot, { recursive: true });
+}
+
+['public', 'private'].forEach(dir => {
+    if (!fs.existsSync(path.join(/*turbopackIgnore: true*/ filesRoot, dir))) {
+        fs.mkdirSync(path.join(/*turbopackIgnore: true*/ filesRoot, dir), { recursive: true });
+    }
+});
+
+const realFilesRoot = fs.realpathSync(resolvedFilesRoot);
+// Public/private may be operator-configured symlinks to separate storage volumes.
+// Trust their startup targets, then keep every descendant inside its own root.
+const managedRealRoots = new Map(['public', 'private'].map(name => [
+    name, fs.realpathSync(path.join(/*turbopackIgnore: true*/ filesRoot, name)),
+]));
+
+function isResolvedPathInsideRoot(absPath: string, root: string): boolean {
+    const relative = path.relative(root, absPath);
+    return relative === '' || (!!relative && !relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+function normalizeRelativePath(relativePath: string): string | null {
+    if (typeof relativePath !== 'string') return null;
+    const normalized = relativePath.replace(/^\/+/, '').replace(/\\/g, '/');
+    if (normalized.split('/').some((segment) => segment === '..')) return null;
+    return normalized;
+}
+
+function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
+    return typeof error === 'object' && error !== null && 'code' in error;
+}
 
 /** Returns true if relativePath has no path traversal and resolves under filesRoot. */
 export function isPathUnderRoot(relativePath: string): boolean {
-    if (typeof relativePath !== 'string' || relativePath.includes('..')) return false;
-    const resolved = path.resolve(filesRoot, relativePath);
-    return resolved === resolvedFilesRoot || resolved.startsWith(resolvedFilesRoot + path.sep);
+    return getResolvedAbsPath(relativePath) !== null;
 }
 
 /** Resolved absolute path under filesRoot, or null if invalid (path traversal). */
 export function getResolvedAbsPath(relativePath: string): string | null {
-    if (!isPathUnderRoot(relativePath)) return null;
-    return path.resolve(filesRoot, relativePath);
+    const normalized = normalizeRelativePath(relativePath);
+    if (normalized === null) return null;
+
+    const resolved = path.resolve(filesRoot, normalized);
+    if (!isResolvedPathInsideRoot(resolved, resolvedFilesRoot)) return null;
+    const rootName = path.relative(resolvedFilesRoot, resolved).split(path.sep)[0];
+    // Internal upload staging and other service storage are never downloadable.
+    if (rootName && rootName !== 'public' && rootName !== 'private') return null;
+
+    return resolved;
 }
 
-// Ensure filesRoot includes public/private
-['public', 'private'].forEach(dir => {
-    if (!fs.existsSync(path.join(filesRoot, dir))) {
-        fs.mkdirSync(path.join(filesRoot, dir), { recursive: true });
-    }
-});
+async function getExistingAbsPathOrThrow(relativePath: string): Promise<string> {
+    const absPath = getResolvedAbsPath(relativePath);
+    if (!absPath) throw new Error("Access denied");
 
-export interface FileItem {
-    name: string;
-    isDirectory: boolean;
-    size: number;
-    mimetype: string;
-    modified: string;
-}
-
-/** Recursively compute total size of a directory (files only). */
-async function getDirectorySizeRecursive(absPath: string): Promise<number> {
-    const names = await fsp.readdir(absPath);
-    let total = 0;
-    for (const name of names) {
-        const entryPath = path.join(absPath, name);
-        const stat = await fsp.stat(entryPath);
-        if (stat.isDirectory()) {
-            total += await getDirectorySizeRecursive(entryPath);
-        } else {
-            total += stat.size;
+    try {
+        const realPath = await fsp.realpath(/*turbopackIgnore: true*/ absPath);
+        const rootName = path.relative(resolvedFilesRoot, absPath).split(path.sep)[0];
+        const allowedRoot = managedRealRoots.get(rootName) ?? realFilesRoot;
+        if (!isResolvedPathInsideRoot(realPath, allowedRoot)) {
+            throw new Error("Access denied");
         }
+        return realPath;
+    } catch (error) {
+        if (isErrnoException(error) && error.code === 'ENOENT') {
+            throw new Error("Not found");
+        }
+        throw error;
     }
-    return total;
 }
 
-/** Get folder size from cache or compute and cache it. Relative path is under files root. */
-async function getFolderSizeCached(relativePath: string): Promise<number> {
-    const cached = getCachedFolderSize(relativePath);
-    if (cached !== null) return cached;
-    const absPath = path.resolve(filesRoot, relativePath);
-    const size = await getDirectorySizeRecursive(absPath);
-    setCachedFolderSize(relativePath, size);
-    return size;
+/** Existing real path under filesRoot, or null for missing/invalid/escaped paths. */
+export async function getSafeExistingAbsPath(relativePath: string): Promise<string | null> {
+    try {
+        return await getExistingAbsPathOrThrow(relativePath);
+    } catch {
+        return null;
+    }
 }
 
-export async function listFiles(pathSegments: string[], session: any, password?: string | null) {
+type SessionLike = { id: number };
+
+export async function listFiles(pathSegments: string[], session: SessionLike | null, password?: string | null) {
     const requestedPath = pathSegments.join('/');
 
     // Basic Traversal Check
-    if (requestedPath.includes('..')) {
+    if (!isPathUnderRoot(requestedPath)) {
         throw new Error("Access denied");
     }
 
@@ -104,36 +135,18 @@ export async function listFiles(pathSegments: string[], session: any, password?:
         if (!session && requestedPath !== "") throw new Error("Unauthorized");
     }
 
-    const absPath = path.resolve(filesRoot, requestedPath);
-    if (absPath !== resolvedFilesRoot && !absPath.startsWith(resolvedFilesRoot + path.sep)) {
-        throw new Error("Access denied");
-    }
+    const absPath = await getExistingAbsPathOrThrow(requestedPath);
 
     let stat: fs.Stats;
     try {
-        stat = await fsp.stat(absPath);
+        stat = await fsp.stat(/*turbopackIgnore: true*/ absPath);
     } catch {
         throw new Error("Not found");
     }
 
     if (stat.isDirectory()) {
-        const names = await fsp.readdir(absPath);
-        const files = await Promise.all(
-            names.map(async (file) => {
-                const filePath = path.join(absPath, file);
-                const fileStat = await fsp.stat(filePath);
-                const relPath = requestedPath ? `${requestedPath}/${file}` : file;
-                const size = fileStat.isDirectory()
-                    ? await getFolderSizeCached(relPath)
-                    : fileStat.size;
-                return {
-                    name: file,
-                    isDirectory: fileStat.isDirectory(),
-                    size,
-                    mimetype: mime.lookup(file) || 'application/octet-stream',
-                    modified: fileStat.mtime.toISOString(),
-                };
-            })
+        const files = await readDirectory(absPath, (name) =>
+            getSafeExistingAbsPath(requestedPath ? `${requestedPath}/${name}` : name)
         );
         return { path: requestedPath, files };
     } else {
@@ -142,11 +155,5 @@ export async function listFiles(pathSegments: string[], session: any, password?:
 }
 
 export function getAbsPath(pathSegments: string[]) {
-    const requestedPath = pathSegments.join('/');
-    if (requestedPath.includes('..')) return null;
-    const absPath = path.resolve(filesRoot, requestedPath);
-    if (absPath !== resolvedFilesRoot && !absPath.startsWith(resolvedFilesRoot + path.sep)) {
-        return null;
-    }
-    return absPath;
+    return getResolvedAbsPath(pathSegments.join('/'));
 }

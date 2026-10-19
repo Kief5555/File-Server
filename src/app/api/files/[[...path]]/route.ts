@@ -1,14 +1,8 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs';
 import fsp from 'fs/promises';
-import path from 'path';
-import { Readable } from 'stream';
 import { getSession } from '@/lib/auth';
-import { listFiles, getAbsPath } from '@/lib/files';
-import mime from 'mime-types';
-
-const MAX_INLINE_FILE_BYTES = 2 * 1024 * 1024 * 1024;
-const UNSAFE_INLINE_TYPES = new Set(['text/html', 'application/xhtml+xml', 'image/svg+xml']);
+import { listFiles, getResolvedAbsPath, getSafeExistingAbsPath } from '@/lib/files';
+import { serveFileWithRangeSupport } from '@/lib/fileResponses';
 
 // Helper to safely parse path from URL if params fail or are ambiguous
 function getPathFromUrl(url: string) {
@@ -22,62 +16,12 @@ function getPathFromUrl(url: string) {
     return [];
 }
 
-// Serve file with range request support (needed for video/audio seeking)
-async function serveFileWithRangeSupport(req: Request, absPath: string, mimetype: string, isDownload: boolean) {
-    const stat = await fsp.stat(absPath);
-    const fileSize = stat.size;
-    const fileName = path.basename(absPath);
-    const isLargeFile = fileSize > MAX_INLINE_FILE_BYTES;
-    const isUnsafeInlineType = UNSAFE_INLINE_TYPES.has(mimetype);
-    const disposition = isDownload || isLargeFile || isUnsafeInlineType ? 'attachment' : 'inline';
-    
-    const rangeHeader = req.headers.get('range');
-    
-    if (rangeHeader) {
-        const parts = rangeHeader.replace(/bytes=/, '').split('-');
-        const start = parseInt(parts[0], 10);
-        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-        if (start >= fileSize || end >= fileSize || start > end) {
-            return new NextResponse(null, {
-                status: 416,
-                headers: { 'Content-Range': `bytes */${fileSize}` }
-            });
-        }
-        const chunkSize = end - start + 1;
-        const nodeStream = fs.createReadStream(absPath, { start, end });
-        const webStream = Readable.toWeb(nodeStream) as ReadableStream<Uint8Array>;
-        return new NextResponse(webStream, {
-            status: 206,
-            headers: {
-                'Content-Type': mimetype,
-                'Content-Length': chunkSize.toString(),
-                'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-                'Accept-Ranges': 'bytes',
-                'Content-Disposition': `${disposition}; filename="${fileName}"`,
-                'Cache-Control': 'public, max-age=3600'
-            }
-        });
-    }
-
-    const nodeStream = fs.createReadStream(absPath);
-    const webStream = Readable.toWeb(nodeStream) as ReadableStream<Uint8Array>;
-    return new NextResponse(webStream, {
-        headers: {
-            'Content-Type': mimetype,
-            'Content-Length': fileSize.toString(),
-            'Accept-Ranges': 'bytes',
-            'Content-Disposition': `${disposition}; filename="${fileName}"`,
-            'Cache-Control': 'public, max-age=3600'
-        }
-    });
-}
-
 export async function GET(req: Request, { params }: { params: Promise<{ path?: string[] }> }) {
     let pathSegments: string[] | undefined;
     try {
         const p = await params;
         pathSegments = p.path;
-    } catch (e) { }
+    } catch { }
 
     if (!pathSegments) {
         pathSegments = getPathFromUrl(req.url);
@@ -89,19 +33,30 @@ export async function GET(req: Request, { params }: { params: Promise<{ path?: s
 
     try {
         const result = await listFiles(pathSegments, session, password);
-        return NextResponse.json(result);
-    } catch (error: any) {
-        if (error.message === "Unauthorized") return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-        if (error.message === "Not found") return NextResponse.json({ message: "Not found" }, { status: 404 });
-        if (error.message === "Access denied") return NextResponse.json({ message: "Access denied" }, { status: 403 });
+        return NextResponse.json(result, { headers: { "Cache-Control": "private, no-store" } });
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Error";
+        if (message === "Unauthorized") return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+        if (message === "Not found") return NextResponse.json({ message: "Not found" }, { status: 404 });
+        if (message === "No permissions" || message === "Access denied") return NextResponse.json({ message: "Access denied" }, { status: 403 });
 
         // If it's not a directory, serve the file with range support
-        if (error.message === "Not a directory") {
-            const absPath = getAbsPath(pathSegments);
-            if (absPath && fs.existsSync(absPath)) {
-                const mimetype = mime.lookup(absPath) || 'application/octet-stream';
+        if (message === "Not a directory") {
+            const requestedPath = pathSegments.join('/');
+            const resolvedPath = getResolvedAbsPath(requestedPath);
+            if (resolvedPath) {
+                const absPath = await getSafeExistingAbsPath(requestedPath);
+                if (!absPath) {
+                    try {
+                        await fsp.access(resolvedPath);
+                    } catch {
+                        return NextResponse.json({ message: "Not found" }, { status: 404 });
+                    }
+                    return NextResponse.json({ message: "Access denied" }, { status: 403 });
+                }
                 const isDownload = url.searchParams.get('download') === '1';
-                return await serveFileWithRangeSupport(req, absPath, mimetype, isDownload);
+                const cacheControl = pathSegments[0] === 'public' ? 'public, max-age=3600' : 'private, no-store';
+                return serveFileWithRangeSupport(req, absPath, { download: isDownload, cacheControl });
             }
         }
 

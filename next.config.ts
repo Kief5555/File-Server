@@ -7,6 +7,19 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
 
 const nextConfig: NextConfig = {
   trailingSlash: true,
+  // Serve API POST bodies directly instead of redirecting every client request.
+  skipTrailingSlashRedirect: true,
+  outputFileTracingExcludes: {
+    "/*": [
+      "./files/**/*",
+      "./database/**/*",
+      "./README.md",
+      "./components.json",
+      "./create-user.js",
+      "./eslint.config.mjs",
+      "./next.config.ts",
+    ],
+  },
   async headers() {
     if (allowedOrigins.length !== 1) return [];
 

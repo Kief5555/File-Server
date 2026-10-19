@@ -7,7 +7,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { toast } from "sonner";
 import Link from "next/link";
-import { Trash, Settings, Users, Upload, Trash2, Lock, Check, X, Key, Copy, Eye, EyeOff } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Trash, Settings, Users, Upload, Trash2, Lock, Check, X, Key, Copy } from "lucide-react";
 import { ModeToggle } from "@/components/mode-toggle";
 import { Label } from "@/components/ui/label";
 
@@ -21,7 +22,15 @@ interface User {
     created_at: string;
 }
 
+interface ApiKey {
+    id: number;
+    name: string | null;
+    last_used_at: string | null;
+    created_at: string;
+}
+
 export default function AdminPanel() {
+    const router = useRouter();
     const [users, setUsers] = useState<User[]>([]);
     const [newUserUser, setNewUserUser] = useState("");
     const [newUserPass, setNewUserPass] = useState("");
@@ -30,7 +39,7 @@ export default function AdminPanel() {
     const [newUserCanPrivate, setNewUserCanPrivate] = useState(false);
     const [privatePassword, setPrivatePassword] = useState("");
     const [activeTab, setActiveTab] = useState<"users" | "settings" | "api-keys">("users");
-    const [apiKeys, setApiKeys] = useState<any[]>([]);
+    const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
     const [newApiKeyName, setNewApiKeyName] = useState("");
     const [newApiKey, setNewApiKey] = useState<string | null>(null);
     const [isCreatingKey, setIsCreatingKey] = useState(false);
@@ -46,20 +55,8 @@ export default function AdminPanel() {
                 const data = await res.json();
                 setUsers(data);
             }
-        } catch (error) {
+        } catch {
             toast.error("Failed to load users");
-        }
-    };
-
-    const fetchSettings = async () => {
-        try {
-            const res = await fetch("/api/admin/settings");
-            if (res.ok) {
-                const data = await res.json();
-                setPrivatePassword(data.private_password || "");
-            }
-        } catch (error) {
-            toast.error("Failed to load settings");
         }
     };
 
@@ -70,28 +67,36 @@ export default function AdminPanel() {
                 const data = await res.json();
                 setApiKeys(data);
             }
-        } catch (error) {
+        } catch {
             toast.error("Failed to load API keys");
         }
     };
 
     useEffect(() => {
-        fetchUsers();
-        fetchSettings();
-        fetchApiKeys();
-    }, []);
-
-    // Check if user has access on mount
-    useEffect(() => {
-        const checkAccess = async () => {
-            const res = await fetch("/api/admin/users");
-            if (res.status === 403 || res.status === 401) {
-                // Redirect to home if not authorized
-                window.location.href = "/files/public";
+        const controller = new AbortController();
+        const load = async () => {
+            try {
+                const responses = await Promise.all(["/api/admin/users", "/api/admin/settings", "/api/api-keys"]
+                    .map(url => fetch(url, { signal: controller.signal })));
+                if ([401, 403].includes(responses[0].status)) {
+                    router.replace("/files/public");
+                    return;
+                }
+                const [users, settings, keys] = await Promise.all(responses.map(async response => {
+                    if (!response.ok) throw new Error("Could not load admin settings");
+                    return response.json();
+                }));
+                if (controller.signal.aborted) return;
+                setUsers(users);
+                setPrivatePassword(settings.private_password || "");
+                setApiKeys(keys);
+            } catch {
+                if (!controller.signal.aborted) toast.error("Could not load admin settings");
             }
         };
-        checkAccess();
-    }, []);
+        void load();
+        return () => controller.abort();
+    }, [router]);
 
     const handleCreateUser = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -120,7 +125,7 @@ export default function AdminPanel() {
                 const data = await res.json();
                 toast.error(data.message || "Failed to create user");
             }
-        } catch (error) {
+        } catch {
             toast.error("Error creating user");
         }
     };
@@ -140,7 +145,7 @@ export default function AdminPanel() {
                 const data = await res.json();
                 toast.error(data.message || "Failed to delete");
             }
-        } catch (error) {
+        } catch {
             toast.error("Error deleting user");
         }
     };
@@ -164,7 +169,7 @@ export default function AdminPanel() {
                 const data = await res.json();
                 toast.error(data.message || "Failed to update");
             }
-        } catch (error) {
+        } catch {
             toast.error("Error updating permissions");
         }
     };
@@ -181,7 +186,7 @@ export default function AdminPanel() {
             } else {
                 toast.error("Failed to save settings");
             }
-        } catch (error) {
+        } catch {
             toast.error("Error saving settings");
         }
     };
@@ -200,11 +205,11 @@ export default function AdminPanel() {
                 setNewApiKey(data.apiKey);
                 setNewApiKeyName("");
                 fetchApiKeys();
-                toast.success("API key created! Copy it now - it won't be shown again.");
+                toast.success("API key created. Copy it now; it will not be shown again.");
             } else {
                 toast.error("Failed to create API key");
             }
-        } catch (error) {
+        } catch {
             toast.error("Error creating API key");
         } finally {
             setIsCreatingKey(false);
@@ -225,7 +230,7 @@ export default function AdminPanel() {
             } else {
                 toast.error("Failed to delete API key");
             }
-        } catch (error) {
+        } catch {
             toast.error("Error deleting API key");
         }
     };
@@ -453,7 +458,7 @@ export default function AdminPanel() {
                                             <div className="p-4 bg-muted rounded-lg border-2 border-primary">
                                                 <p className="text-sm font-medium mb-2 text-muted-foreground">Your new API key:</p>
                                                 <code className="text-sm break-all block bg-background p-2 rounded">{newApiKey}</code>
-                                                <p className="text-xs text-destructive mt-2 font-semibold">⚠️ Save this key now - it won't be shown again!</p>
+                                                <p className="text-xs text-destructive mt-2 font-semibold">Save this key now. It will not be shown again.</p>
                                             </div>
                                             <div className="flex gap-2">
                                                 <Button onClick={() => copyApiKey(newApiKey)} className="flex-1">

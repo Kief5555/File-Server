@@ -1,174 +1,118 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs';
-import fsp from 'fs/promises';
-import path from 'path';
-import { Readable } from 'stream';
-import { pipeline } from 'stream/promises';
-import type { ReadableStream as NodeReadableStream } from 'stream/web';
+import fsp from 'node:fs/promises';
+import path from 'node:path';
 import { getSession } from '@/lib/auth';
-import { invalidateFolderSizeCache } from '@/lib/files';
+import { getSafeExistingAbsPath, invalidateFolderSizeCache } from '@/lib/files';
+import { prepareUpload, writeChunk, mergeUpload } from '@/lib/upload-store';
 import db from '@/lib/db';
 
-const filesRoot = path.join(process.cwd(), 'files');
-const tempRoot = path.join(filesRoot, '.temp-uploads');
-const MAX_UPLOAD_CHUNK_BYTES = Number(process.env.MAX_UPLOAD_CHUNK_BYTES || 16 * 1024 * 1024);
-const MAX_UPLOAD_BYTES = Number(process.env.MAX_UPLOAD_BYTES || 50 * 1024 * 1024 * 1024);
+const tempRoot = path.join(/*turbopackIgnore: true*/ process.cwd(), 'files', '.temp-uploads');
+const MAX_CHUNK = Number(process.env.MAX_UPLOAD_CHUNK_BYTES || 16 * 1024 * 1024);
+const MAX_FILE = Number(process.env.MAX_UPLOAD_BYTES || 50 * 1024 * 1024 * 1024);
+const jsonError = (message: string, status: number) => NextResponse.json({ message }, { status });
+const validId = (id: unknown): id is string => typeof id === 'string' && /^[a-zA-Z0-9_-]{1,160}$/.test(id);
 
-if (!fs.existsSync(tempRoot)) {
-    fs.mkdirSync(tempRoot, { recursive: true });
-}
-
-function jsonError(message: string, status: number) {
-    return NextResponse.json({ message }, { status });
-}
-
-function parseOptionalInteger(value: FormDataEntryValue | null): number | null {
-    if (typeof value !== 'string' || value.trim() === '') return null;
-    const parsed = Number(value);
-    return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
-}
-
-function getSafeUploadId(identifier: string | null) {
-    if (!identifier || !/^[a-zA-Z0-9._-]{1,160}$/.test(identifier)) return null;
-    if (identifier === '.' || identifier === '..') return null;
-    return identifier;
-}
-
-function getSafeTargetPath(rawPath: string) {
-    if (rawPath.includes('..')) return null;
-    const targetDir = path.resolve(filesRoot, rawPath);
-    const resolvedRoot = path.resolve(filesRoot);
-    if (targetDir !== resolvedRoot && !targetDir.startsWith(resolvedRoot + path.sep)) return null;
-    return targetDir;
-}
-
-async function writeUploadedFile(file: File, destination: string) {
-    const nodeStream = Readable.fromWeb(file.stream() as unknown as NodeReadableStream<Uint8Array>);
-    await pipeline(nodeStream, fs.createWriteStream(destination, { flags: 'w' }));
-}
-
-async function mergeChunks(chunkDir: string, filePath: string, totalChunks: number) {
-    const lockPath = path.join(chunkDir, '.merge.lock');
-    let lock: fsp.FileHandle | null = null;
-
-    try {
-        lock = await fsp.open(lockPath, 'wx');
-    } catch (error: unknown) {
-        if ((error as NodeJS.ErrnoException)?.code === 'EEXIST') return false;
-        throw error;
-    }
-
-    try {
-        const partialPath = `${filePath}.uploading`;
-        await fsp.rm(partialPath, { force: true });
-
-        const writeStream = fs.createWriteStream(partialPath, { flags: 'w' });
-        try {
-            for (let i = 0; i < totalChunks; i++) {
-                await pipeline(fs.createReadStream(path.join(chunkDir, i.toString())), writeStream, { end: false });
-            }
-        } finally {
-            await new Promise<void>((resolve, reject) => {
-                writeStream.end((err: Error | null | undefined) => (err ? reject(err) : resolve()));
-            });
-        }
-
-        await fsp.rename(partialPath, filePath);
-        await fsp.rm(chunkDir, { recursive: true, force: true });
-        return true;
-    } finally {
-        await lock.close().catch(() => {});
-    }
+async function uploadUser() {
+    const session = await getSession();
+    if (!session) return null;
+    const user = db.prepare('SELECT id, can_upload, can_access_private, is_admin FROM users WHERE id = ?').get(session.id) as {
+        id: number; can_upload: number; can_access_private: number; is_admin: number;
+    } | undefined;
+    return user;
 }
 
 export async function POST(req: Request) {
-    const session = await getSession();
-    if (!session) return jsonError("Unauthorized", 401);
-
-    const user = db.prepare('SELECT can_upload, is_admin FROM users WHERE id = ?').get(session.id) as { can_upload: number; is_admin: number } | undefined;
-    if (!user || (user.is_admin !== 1 && user.can_upload !== 1)) {
-        return jsonError("Forbidden", 403);
-    }
-
-    const contentLengthHeader = req.headers.get('content-length');
-    const contentLength = Number(contentLengthHeader || 0);
-    if (!contentLengthHeader || !Number.isFinite(contentLength) || contentLength < 1) {
-        return jsonError("Content-Length is required for uploads.", 411);
-    }
-    if (contentLength > MAX_UPLOAD_CHUNK_BYTES + 1024 * 1024) {
-        return jsonError("Upload request is too large. Use chunked uploads.", 413);
-    }
+    const user = await uploadUser();
+    if (!user) return jsonError('Unauthorized', 401);
+    if (!user.is_admin && !user.can_upload) return jsonError('Forbidden', 403);
+    const length = Number(req.headers.get('content-length'));
+    if (!Number.isSafeInteger(length) || length < 1) return jsonError('Content-Length is required for uploads.', 411);
+    if (length > MAX_CHUNK + 1024 * 1024) return jsonError('Upload request is too large.', 413);
 
     try {
-        const formData = await req.formData();
-        const file = formData.get('file') as File | null;
-        const targetPathQuery = new URL(req.url).searchParams.get('path') || 'public';
-
-        const chunkIndex = parseOptionalInteger(formData.get('chunkIndex'));
-        const totalChunks = parseOptionalInteger(formData.get('totalChunks'));
-        const fileSize = parseOptionalInteger(formData.get('fileSize'));
-        const chunkSize = parseOptionalInteger(formData.get('chunkSize'));
-        const identifier = getSafeUploadId(formData.get('identifier') as string | null);
-        const rawFileName = (formData.get('fileName') as string | null) || file?.name || 'file';
-        const fileName = path.basename(String(rawFileName)) || 'file';
-
-        if (fileName === '.' || fileName === '..' || fileName.includes('..')) return jsonError("Invalid file name", 400);
-        if (!file) return jsonError("No file", 400);
-        if (file.size > MAX_UPLOAD_CHUNK_BYTES) return jsonError("Upload chunk is too large", 413);
-
-        const targetDir = getSafeTargetPath(targetPathQuery);
-        if (!targetDir) return jsonError("Access denied", 403);
-        if (!fs.existsSync(targetDir)) return jsonError("Target directory not found", 404);
-
-        const filePath = path.join(targetDir, fileName);
-        const hasChunkMetadata = chunkIndex !== null || totalChunks !== null || formData.has('identifier') || fileSize !== null || chunkSize !== null;
-
-        if (hasChunkMetadata) {
-            if (chunkIndex === null || totalChunks === null || !identifier || fileSize === null || chunkSize === null) {
-                return jsonError("Invalid chunk metadata", 400);
-            }
-            if (totalChunks < 1 || chunkIndex >= totalChunks) {
-                return jsonError("Invalid chunk index", 400);
-            }
-            if (chunkSize < 1 || chunkSize > MAX_UPLOAD_CHUNK_BYTES || totalChunks !== Math.ceil(fileSize / chunkSize)) {
-                return jsonError("Invalid chunk size", 400);
-            }
-            if (fileSize > MAX_UPLOAD_BYTES) {
-                return jsonError("Upload exceeds server size limit", 413);
-            }
-
-            const chunkDir = path.join(tempRoot, identifier);
-            await fsp.mkdir(chunkDir, { recursive: true });
-            await writeUploadedFile(file, path.join(chunkDir, chunkIndex.toString()));
-
-            let allChunksPresent = true;
-            for (let i = 0; i < totalChunks; i++) {
-                try {
-                    await fsp.access(path.join(chunkDir, i.toString()));
-                } catch {
-                    allChunksPresent = false;
-                    break;
-                }
-            }
-
-            if (allChunksPresent) {
-                const merged = await mergeChunks(chunkDir, filePath, totalChunks);
-                invalidateFolderSizeCache(targetPathQuery);
-                return NextResponse.json({ message: merged ? "Uploaded and merged" : "Chunk received; merge in progress" });
-            }
-
-            return NextResponse.json({ message: `Chunk ${chunkIndex} received` });
+        const data = await req.formData();
+        const target = (new URL(req.url).searchParams.get('path') || 'public').replace(/^\/+|\/+$/g, '');
+        if (!/^(public|private)(\/|$)/.test(target) || target.split('/').some(p => p === '..' || p.includes('\\'))) {
+            return jsonError('Invalid target directory', 400);
         }
+        if (target.startsWith('private') && !user.is_admin && !user.can_access_private) return jsonError('Forbidden', 403);
+        const directory = await getSafeExistingAbsPath(target);
+        if (!directory || !(await fsp.stat(directory)).isDirectory()) return jsonError('Target directory not found', 404);
+        const file = data.get('file');
+        const name = data.get('fileName') || (file instanceof File ? file.name : '');
+        if (typeof name !== 'string' || !name || name === '.' || name === '..' || /[\\/\x00]/.test(name)) return jsonError('Invalid file name', 400);
+        const destination = path.join(directory, name);
+        // Refuse symlink destinations so writes cannot escape the managed directory.
+        const existing = await fsp.lstat(destination).catch((error: NodeJS.ErrnoException) => {
+            if (error.code === 'ENOENT') return null;
+            throw error;
+        });
+        if (existing && !existing.isFile()) return jsonError('Destination is not a regular file', 409);
 
-        if (file.size > MAX_UPLOAD_CHUNK_BYTES) {
-            return jsonError("Single-request uploads are too large. Use the chunked uploader.", 413);
+        const identifier = data.get('identifier');
+        if (!identifier) {
+            if (!(file instanceof File)) return jsonError('No file', 400);
+            if (file.size > Math.min(MAX_CHUNK, MAX_FILE)) return jsonError('Upload is too large', 413);
+            const staging = path.join(tempRoot, `${user.id}-${crypto.randomUUID()}`);
+            await fsp.mkdir(staging, { recursive: true });
+            try {
+                await writeChunk(staging, 0, file);
+                await fsp.rename(path.join(staging, '0'), destination);
+            } finally {
+                await fsp.rm(staging, { recursive: true, force: true });
+            }
+            invalidateFolderSizeCache(target);
+            return NextResponse.json({ message: 'Uploaded', complete: true });
         }
-
-        await writeUploadedFile(file, filePath);
-        invalidateFolderSizeCache(targetPathQuery);
-        return NextResponse.json({ message: "Uploaded" });
-    } catch (e) {
-        console.error("Upload error:", e);
-        return jsonError("Error", 500);
+        if (!validId(identifier)) return jsonError('Invalid upload identifier', 400);
+        const integer = (key: string) => {
+            const value = data.get(key);
+            return typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : NaN;
+        };
+        const fileSize = integer('fileSize'), chunkSize = integer('chunkSize'), totalChunks = integer('totalChunks');
+        if (![fileSize, chunkSize, totalChunks].every(Number.isSafeInteger) || fileSize < 0 || fileSize > MAX_FILE ||
+            chunkSize < 1 || chunkSize > MAX_CHUNK || totalChunks !== Math.max(1, Math.ceil(fileSize / chunkSize))) {
+            return jsonError('Invalid chunk metadata or file size', 400);
+        }
+        const metadata = { target, fileName: name, fileSize, chunkSize, totalChunks };
+        const staging = path.join(tempRoot, `${user.id}-${identifier}`);
+        await prepareUpload(staging, metadata);
+        // Receipt makes a retried finalize request safe after a lost response.
+        const receipt = path.join(staging, 'complete');
+        if (await fsp.readFile(receipt, 'utf8').catch(() => '') === '1') return NextResponse.json({ complete: true });
+        if (data.get('finalize') !== 'true') {
+            const index = integer('chunkIndex');
+            if (!Number.isSafeInteger(index) || index < 0 || index >= totalChunks || !(file instanceof File) ||
+                file.size !== Math.min(chunkSize, fileSize - index * chunkSize)) return jsonError('Invalid upload chunk', 400);
+            await writeChunk(staging, index, file);
+            // New clients finalize explicitly after all workers finish; no per-chunk scans.
+            if (data.get('deferMerge') === 'true') return NextResponse.json({ complete: false });
+            const names = new Set(await fsp.readdir(staging));
+            for (let i = 0; i < totalChunks; i++) if (!names.has(String(i))) return NextResponse.json({ complete: false });
+        }
+        await mergeUpload(staging, destination, metadata);
+        await fsp.writeFile(receipt, '1');
+        for (let offset = 0; offset < totalChunks; offset += 32) {
+            await Promise.all(Array.from({ length: Math.min(32, totalChunks - offset) }, (_, i) =>
+                fsp.rm(path.join(staging, String(offset + i)), { force: true })));
+        }
+        invalidateFolderSizeCache(target);
+        return NextResponse.json({ message: 'Uploaded', complete: true });
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'EEXIST') return jsonError('Upload is being finalized; retry shortly', 409);
+        if ((error as Error).message === 'Upload metadata changed') return jsonError('Upload metadata changed', 409);
+        if ((error as Error).message === 'Incomplete upload' || (error as NodeJS.ErrnoException).code === 'ENOENT') return jsonError('Upload is incomplete; retry missing chunks', 400);
+        console.error('Upload error:', error);
+        return jsonError('Upload failed', 500);
     }
+}
+
+export async function DELETE(req: Request) {
+    const user = await uploadUser();
+    if (!user) return jsonError('Unauthorized', 401);
+    if (!user.is_admin && !user.can_upload) return jsonError('Forbidden', 403);
+    const identifier = new URL(req.url).searchParams.get('identifier');
+    if (!validId(identifier)) return jsonError('Invalid upload identifier', 400);
+    await fsp.rm(path.join(tempRoot, `${user.id}-${identifier}`), { recursive: true, force: true });
+    return NextResponse.json({ message: 'Upload staging removed' });
 }

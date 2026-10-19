@@ -4,18 +4,13 @@ import { getSession } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { listFiles, getAbsPath } from "@/lib/files";
+import { listFiles, type FileItem } from "@/lib/files";
 import LogoutButton from "@/components/LogoutButton";
 import db from "@/lib/db";
-import fs from "fs";
-import path from "path";
-import mime from "mime-types";
-import { NextResponse } from "next/server";
 
-export default async function ExplorerPage(props: { params: Promise<{ path?: string[] }>, searchParams: Promise<{ download?: string; password?: string }> }) {
+export default async function ExplorerPage(props: { params: Promise<{ path?: string[] }>, searchParams: Promise<{ password?: string }> }) {
     const params = await props.params;
     const searchParams = await props.searchParams;
-    const isDownload = searchParams.download === '1';
     const password = searchParams.password || null;
 
     // Handle different entry points (/files/public, /files/private, /, etc)
@@ -33,21 +28,25 @@ export default async function ExplorerPage(props: { params: Promise<{ path?: str
 
     const session = await getSession();
     
-    // Check if user is admin
     let isAdmin = false;
+    let canUpload = false;
+    let canDelete = false;
     if (session) {
-        const user = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(session.id) as { is_admin: number } | undefined;
+        const user = db.prepare('SELECT can_upload, can_delete, is_admin FROM users WHERE id = ?').get(session.id) as { can_upload: number; can_delete: number; is_admin: number } | undefined;
         isAdmin = user?.is_admin === 1;
+        canUpload = isAdmin || user?.can_upload === 1;
+        canDelete = isAdmin || user?.can_delete === 1;
     }
 
-    let initialFileData: any = { files: [] };
+    let initialFileData: { files: FileItem[] } = { files: [] };
     let error: string | null = null;
     let errorType: "unauthorized" | "no_permissions" | "other" = "other";
 
     try {
         initialFileData = await listFiles(pathSegments, session, password);
-    } catch (e: any) {
-        if (e.message === "Unauthorized") {
+    } catch (errorValue: unknown) {
+        const message = errorValue instanceof Error ? errorValue.message : "Error";
+        if (message === "Unauthorized") {
             // Not logged in - redirect to login
             if (!session) {
                 redirect("/login");
@@ -55,12 +54,12 @@ export default async function ExplorerPage(props: { params: Promise<{ path?: str
                 error = "Unauthorized";
                 errorType = "unauthorized";
             }
-        } else if (e.message === "No permissions") {
+        } else if (message === "No permissions") {
             // Logged in but no permissions
             error = "You don't have permission to access this folder.";
             errorType = "no_permissions";
         } else {
-            error = e.message;
+            error = message;
             errorType = "other";
         }
     }
@@ -96,9 +95,12 @@ export default async function ExplorerPage(props: { params: Promise<{ path?: str
             </header>
             <main className="flex-1 min-h-0 overflow-auto p-3 sm:p-6">
                 <FileExplorer
+                    key={pathSegments.join('/')}
                     initialPath={pathSegments.join('/')}
                     initialFiles={error ? [] : initialFileData.files}
                     isLoggedIn={!!session}
+                    canUpload={canUpload}
+                    canDelete={canDelete}
                     error={error}
                     errorType={errorType}
                 />

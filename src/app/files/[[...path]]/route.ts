@@ -1,67 +1,12 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
-import { Readable } from 'stream';
+import fsp from 'fs/promises';
 import { getSession } from '@/lib/auth';
-import { getAbsPath } from '@/lib/files';
+import { getResolvedAbsPath, getSafeExistingAbsPath } from '@/lib/files';
 import db, { getSetting } from '@/lib/db';
-import mime from 'mime-types';
-
-const MAX_INLINE_FILE_BYTES = 2 * 1024 * 1024 * 1024;
-const UNSAFE_INLINE_TYPES = new Set(['text/html', 'application/xhtml+xml', 'image/svg+xml']);
-
-// Serve file with range request support (needed for video/audio seeking)
-function serveFileWithRangeSupport(req: Request, absPath: string, mimetype: string, isDownload: boolean): NextResponse {
-    const stat = fs.statSync(absPath);
-    const fileSize = stat.size;
-    const fileName = path.basename(absPath);
-    const isLargeFile = fileSize > MAX_INLINE_FILE_BYTES;
-    const isUnsafeInlineType = UNSAFE_INLINE_TYPES.has(mimetype);
-    const disposition = isDownload || isLargeFile || isUnsafeInlineType ? 'attachment' : 'inline';
-    
-    const rangeHeader = req.headers.get('range');
-    
-    if (rangeHeader) {
-        const parts = rangeHeader.replace(/bytes=/, '').split('-');
-        const start = parseInt(parts[0], 10);
-        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-        if (start >= fileSize || end >= fileSize || start > end) {
-            return new NextResponse(null, {
-                status: 416,
-                headers: { 'Content-Range': `bytes */${fileSize}` }
-            });
-        }
-        const chunkSize = end - start + 1;
-        const fileStream = fs.createReadStream(absPath, { start, end });
-        const webStream = Readable.toWeb(fileStream) as ReadableStream<Uint8Array>;
-        return new NextResponse(webStream, {
-            status: 206,
-            headers: {
-                'Content-Type': mimetype,
-                'Content-Length': chunkSize.toString(),
-                'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-                'Accept-Ranges': 'bytes',
-                'Content-Disposition': `${disposition}; filename="${fileName}"`,
-                'Cache-Control': 'public, max-age=3600'
-            }
-        });
-    }
-    
-    const fileStream = fs.createReadStream(absPath);
-    const webStream = Readable.toWeb(fileStream) as ReadableStream<Uint8Array>;
-    return new NextResponse(webStream, {
-        headers: {
-            'Content-Type': mimetype,
-            'Content-Length': fileSize.toString(),
-            'Accept-Ranges': 'bytes',
-            'Content-Disposition': `${disposition}; filename="${fileName}"`,
-            'Cache-Control': 'public, max-age=3600'
-        }
-    });
-}
+import { serveFileWithRangeSupport } from '@/lib/fileResponses';
 
 // This route handler serves actual files for download/embedding
-// Directory requests are handled by middleware (rewritten to /explorer/*)
+// Directory requests are handled by proxy (rewritten to /explorer/*)
 export async function GET(req: Request, { params }: { params: Promise<{ path?: string[] }> }) {
     const p = await params;
     const url = new URL(req.url);
@@ -110,24 +55,36 @@ export async function GET(req: Request, { params }: { params: Promise<{ path?: s
     }
 
     // Try to serve the file
-    const absPath = getAbsPath(pathSegments);
-    if (!absPath) {
+    const requestedPath = pathSegments.join('/');
+    const resolvedPath = getResolvedAbsPath(requestedPath);
+    if (!resolvedPath) {
         return NextResponse.json({ message: "Invalid path" }, { status: 400 });
     }
 
-    if (!fs.existsSync(absPath)) {
+    const absPath = await getSafeExistingAbsPath(requestedPath);
+    if (!absPath) {
+        try {
+            await fsp.access(resolvedPath);
+        } catch {
+            return NextResponse.json({ message: "Not found" }, { status: 404 });
+        }
+        return NextResponse.json({ message: "Access denied" }, { status: 403 });
+    }
+
+    let stats;
+    try {
+        stats = await fsp.stat(absPath);
+    } catch {
         return NextResponse.json({ message: "Not found" }, { status: 404 });
     }
 
-    const stats = fs.statSync(absPath);
-
-    // If it's a directory (e.g. folder named "file.pdf"), redirect to explorer (rewrite is only allowed in middleware)
+    // If it's a directory (e.g. folder named "file.pdf"), redirect to explorer (rewrite is only allowed in proxy)
     if (stats.isDirectory()) {
         const explorerPath = `/explorer/${pathSegments.join('/')}`;
         return NextResponse.redirect(new URL(explorerPath, req.url));
     }
 
     // Serve the file with range support for video/audio seeking
-    const mimetype = mime.lookup(absPath) || 'application/octet-stream';
-    return serveFileWithRangeSupport(req, absPath, mimetype, isDownload);
+    const cacheControl = pathSegments[0] === 'public' ? 'public, max-age=3600' : 'private, no-store';
+    return serveFileWithRangeSupport(req, absPath, { download: isDownload, cacheControl });
 }

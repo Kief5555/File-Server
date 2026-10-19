@@ -10,3 +10,5 @@ dist
 *.log
 /files/public/*
 /files/private/*
+*.tsbuildinfo
+/files/.temp-uploads/

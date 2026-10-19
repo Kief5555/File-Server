@@ -3,6 +3,13 @@ import db from '@/lib/db';
 import bcrypt from 'bcrypt';
 import { getSession } from '@/lib/auth';
 
+function isSqliteUniqueError(error: unknown): error is { code: string } {
+    return typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code?: unknown }).code === 'SQLITE_CONSTRAINT_UNIQUE';
+}
+
 export async function GET() {
     const session = await getSession();
     if (!session) {
@@ -46,8 +53,8 @@ export async function POST(req: Request) {
         );
 
         return NextResponse.json({ message: "User created" });
-    } catch (e: any) {
-        if (e.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+    } catch (error: unknown) {
+        if (isSqliteUniqueError(error)) {
             return NextResponse.json({ message: "User already exists" }, { status: 409 });
         }
         return NextResponse.json({ message: "Error" }, { status: 500 });
@@ -84,7 +91,7 @@ export async function PATCH(req: Request) {
         );
 
         return NextResponse.json({ message: "User updated" });
-    } catch (e) {
+    } catch {
         return NextResponse.json({ message: "Error" }, { status: 500 });
     }
 }
@@ -112,7 +119,7 @@ export async function DELETE(req: Request) {
         
         db.prepare('DELETE FROM users WHERE id = ?').run(id);
         return NextResponse.json({ message: "User deleted" });
-    } catch (e) {
+    } catch {
         return NextResponse.json({ message: "Error" }, { status: 500 });
     }
 }

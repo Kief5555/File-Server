@@ -3,6 +3,13 @@ import db from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { generateApiKey, hashApiKey } from '@/lib/auth';
 
+function isSqliteUniqueError(error: unknown): error is { code: string } {
+    return typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code?: unknown }).code === 'SQLITE_CONSTRAINT_UNIQUE';
+}
+
 // Get all API keys for the current user
 export async function GET() {
     const session = await getSession();
@@ -43,8 +50,8 @@ export async function POST(req: Request) {
             apiKey,
             message: "API key created. Save this key now - it won't be shown again." 
         });
-    } catch (e: any) {
-        if (e.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+    } catch (error: unknown) {
+        if (isSqliteUniqueError(error)) {
             return NextResponse.json({ message: "API key already exists" }, { status: 409 });
         }
         return NextResponse.json({ message: "Error creating API key" }, { status: 500 });
@@ -74,7 +81,7 @@ export async function DELETE(req: Request) {
         db.prepare('DELETE FROM api_keys WHERE id = ?').run(id);
         
         return NextResponse.json({ message: "API key deleted" });
-    } catch (e) {
+    } catch {
         return NextResponse.json({ message: "Error deleting API key" }, { status: 500 });
     }
 }

@@ -4,7 +4,7 @@ import fs from 'fs';
 import bcrypt from 'bcrypt';
 
 // Ensure database directory exists
-const dbDir = path.join(process.cwd(), 'database');
+const dbDir = path.join(/*turbopackIgnore: true*/ process.cwd(), 'database');
 if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
 }

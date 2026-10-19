@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
-import fs from 'fs';
-import path from 'path';
-import { Readable } from 'stream';
-import mime from 'mime-types';
-import { getResolvedAbsPath } from '@/lib/files';
+import fsp from 'fs/promises';
+import { getResolvedAbsPath, getSafeExistingAbsPath } from '@/lib/files';
+import { serveFileWithRangeSupport } from '@/lib/fileResponses';
 import { verifySharePassword } from '@/lib/sharePasswords';
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -28,22 +26,22 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     }
 
     const relativePath = (share.file_path || '').replace(/\\/g, '/');
-    const fullPath = getResolvedAbsPath(relativePath);
-    if (!fullPath) return NextResponse.json({ message: "Invalid path" }, { status: 403 });
+    const resolvedPath = getResolvedAbsPath(relativePath);
+    if (!resolvedPath) return NextResponse.json({ message: "Invalid path" }, { status: 403 });
 
-    if (!fs.existsSync(fullPath)) return NextResponse.json({ message: "File not found" }, { status: 404 });
-
-    const mimetype = mime.lookup(fullPath) || 'application/octet-stream';
-    const filename = path.basename(fullPath);
-    const stat = fs.statSync(fullPath);
-    const fileSize = stat.size;
-    const nodeStream = fs.createReadStream(fullPath);
-    const webStream = Readable.toWeb(nodeStream) as ReadableStream<Uint8Array>;
-    return new NextResponse(webStream, {
-        headers: {
-            'Content-Type': mimetype,
-            'Content-Disposition': `attachment; filename="${filename}"`,
-            'Content-Length': fileSize.toString()
+    const fullPath = await getSafeExistingAbsPath(relativePath);
+    if (!fullPath) {
+        try {
+            await fsp.access(resolvedPath);
+        } catch {
+            return NextResponse.json({ message: "File not found" }, { status: 404 });
         }
+        return NextResponse.json({ message: "Access denied" }, { status: 403 });
+    }
+
+    const isDownload = searchParams.get('download') === '1';
+    return serveFileWithRangeSupport(req, fullPath, {
+        download: isDownload,
+        cacheControl: 'private, no-store',
     });
 }

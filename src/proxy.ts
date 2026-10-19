@@ -18,7 +18,7 @@ function getCorsHeaders(request: NextRequest) {
   };
 }
 
-// Path looks like a file if the last segment has a known extension (middleware can't use fs)
+// Path looks like a file if the last segment has a known extension (proxy can't use fs)
 const FILE_EXTENSIONS = new Set([
     'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'ico', 'bmp', 'tiff', 'avif',
     'mp4', 'webm', 'mov', 'avi', 'mkv', 'flv', 'wmv', 'm4v',
@@ -40,7 +40,7 @@ function looksLikeFile(pathname: string): boolean {
     return false;
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
     const pathname = request.nextUrl.pathname;
 
     // CORS for API routes - allow anywhere
@@ -73,7 +73,7 @@ export function middleware(request: NextRequest) {
     }
 
     // /files/*: if it looks like a file (has known extension), let the route serve it (route uses fs.stat).
-    // Otherwise treat as directory and rewrite to explorer so URL stays /files/... (rewrite only allowed in middleware).
+    // Otherwise treat as directory and rewrite to explorer so URL stays /files/... (rewrite only allowed in proxy).
     if (pathname.startsWith('/files/') || pathname === '/files') {
         if (looksLikeFile(pathname)) {
             return NextResponse.next();

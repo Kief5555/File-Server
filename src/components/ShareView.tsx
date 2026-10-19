@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Download, File, Lock, Image, Film, Music, FileText } from "lucide-react";
+import { Download, File, Lock, Image as ImageIcon, Film, Music, FileText } from "lucide-react";
 
 interface ShareViewProps {
     shareId: string;
@@ -19,7 +19,7 @@ function getFileIcon(fileName: string) {
     const videoExts = ['mp4', 'webm', 'mov', 'avi', 'mkv'];
     const audioExts = ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a'];
     
-    if (imageExts.includes(ext)) return <Image className="h-16 w-16 text-muted-foreground" />;
+    if (imageExts.includes(ext)) return <ImageIcon className="h-16 w-16 text-muted-foreground" />;
     if (videoExts.includes(ext)) return <Film className="h-16 w-16 text-muted-foreground" />;
     if (audioExts.includes(ext)) return <Music className="h-16 w-16 text-muted-foreground" />;
     return <FileText className="h-16 w-16 text-muted-foreground" />;
@@ -40,16 +40,11 @@ function getFileType(fileName: string): 'image' | 'video' | 'audio' | 'other' {
 export default function ShareView({ shareId, hasPassword, fileName }: ShareViewProps) {
     const [password, setPassword] = useState("");
     const [unlocked, setUnlocked] = useState(!hasPassword);
-    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     
     const fileType = getFileType(fileName);
-
-    useEffect(() => {
-        if (unlocked) {
-            const url = `/api/share/${shareId}/download${hasPassword ? `?password=${encodeURIComponent(password)}` : ''}`;
-            setPreviewUrl(url);
-        }
-    }, [unlocked, shareId, hasPassword, password]);
+    const previewUrl = unlocked
+        ? `/api/share/${shareId}/download${hasPassword ? `?password=${encodeURIComponent(password)}` : ''}`
+        : null;
 
     const handleUnlock = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -64,7 +59,7 @@ export default function ShareView({ shareId, hasPassword, fileName }: ShareViewP
             } else {
                 toast.error("Incorrect password");
             }
-        } catch (error) {
+        } catch {
             toast.error("Error verifying password");
         }
     };

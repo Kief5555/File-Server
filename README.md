@@ -14,13 +14,18 @@ A modern, feature-rich file server built with Next.js, providing file management
 - 🎨 **Modern UI**: Clean, responsive interface with dark mode support
 - 📱 **Mobile Friendly**: Fully responsive design
 - 🖼️ **File Previews**: Preview images, videos, audio, and text files
-- 🔍 **Search & Filter**: Search files and filter by type
+- 🔍 **Search & Filter**: Search the whole current directory, filter by type, and use natural filename sorting
+- ⚡ **Large Folders**: Bounded filesystem work and 100-item pages keep browsing responsive
+- 📤 **Batch Uploads**: Select multiple files or drop them into the explorer; track transfer speed and cancel the queue
+- 📁 **Create Folders**: Create folders directly in the explorer with upload permission
+- 💾 **Saved Preferences**: Remember grid/list view, sorting, and preview settings in this browser
+- ⌨️ **Quick Search**: Press `/` to focus search; refresh a listing without navigating away
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js 18+ 
+- Node.js 22.13 or newer
 - npm, yarn, pnpm, or bun
 
 ### Installation
@@ -134,13 +139,29 @@ curl -H "Authorization: Bearer fs_YOUR_API_KEY_HERE" \
 
 - `GET /api/files/[...path]` - List files in a directory
 - `GET /api/files/[...path]?download=1` - Download a file
-- `POST /api/upload` - Upload a file
+- `POST /api/upload` - Upload a file or stage/finalize chunked uploads
+- `DELETE /api/upload?identifier=...` - Remove the current user's upload staging files
+- `POST /api/folders` - Create a folder (`{ "path": "public", "name": "New folder" }`)
 - `POST /api/delete` - Delete a file
 - `POST /api/rename` - Rename a file
 - `POST /api/share` - Create a shareable link
 - `GET /api/api-keys` - List your API keys
 - `POST /api/api-keys` - Create a new API key
 - `DELETE /api/api-keys` - Delete an API key
+
+## Browsing and Upload Performance
+
+The `files` directory and its `public`/`private` roots may be symlinks to other storage volumes. Their startup targets are trusted; nested symlinks must remain inside their respective managed root. Internal staging paths are excluded from file routes.
+
+Folder listings inspect immediate children with at most 32 concurrent metadata reads. Folder `size` is now `null` in the listing API and displayed as **Folder**: recursive totals are no longer calculated while opening a directory. File sizes remain byte counts. Directory responses use `private, no-store` so refresh reflects disk changes.
+
+The explorer displays up to 100 items per page; search and filters apply to the entire current directory. Sorting is memoized, search is deferred while typing, and folder links do not automatically prefetch every visible directory. Empty folders use the server listing without a duplicate client request.
+
+Text hover previews read at most 8 KiB and display 2,000 characters. File responses stream with byte-range support, ETags, Last-Modified, conditional requests and HEAD handling. HTML and SVG retain download-only behavior.
+
+The uploader processes files in a queue with three parallel 5 MiB chunks per file, bounded retries, live progress, and an explicit finalization step. Each chunk is published atomically; finalization verifies lengths before replacing the destination. Existing filenames are replaced after successful completion. Empty files are supported. Cancellation stops remaining transfers; files already committed remain. Ordinary errors/cancellation remove staged chunks; abrupt browser/server termination can leave staging under `files/.temp-uploads/` for manual cleanup when no uploads are active.
+
+For chunked API clients, send `identifier`, `fileName`, `fileSize`, `chunkSize`, `totalChunks`, `chunkIndex`, `file` and `deferMerge=true`. After all chunks succeed, send the same metadata with `finalize=true` and no file. Finalization can be retried with the same identifier. Use DELETE to clear staging after receiving success or cancelling. Clients without `deferMerge` retain automatic assembly. Upload identifiers are scoped to the authenticated user.
 
 ## File Sharing
 
@@ -180,7 +201,7 @@ The database is automatically created at `database/users.sqlite`. The `create-us
 
 ### Tech Stack
 
-- **Framework**: Next.js 14+ (App Router)
+- **Framework**: Next.js 16.4 / React 19.3 (App Router)
 - **Database**: SQLite (better-sqlite3)
 - **Authentication**: JWT tokens
 - **UI**: React, Tailwind CSS, shadcn/ui
@@ -192,7 +213,14 @@ The database is automatically created at `database/users.sqlite`. The `create-us
 npm run dev      # Start development server
 npm run build    # Build for production
 npm run start    # Start production server
+npm run lint     # Lint source
+npm run typecheck
+npm test         # Filesystem, upload assembly, and streaming regression tests
+npm run test:integration # After build: API tests with isolated temporary files/database
+npm run benchmark # Temporary 2400-file fixture; compares uncached recursive listing
 ```
+
+The lockfile updates Next.js, React, Radix, Tailwind, SQLite and other dependencies. Unused runtime packages were removed. TypeScript stays on 5.9 and ESLint on 9.39 because the installed Next lint plugins do not yet declare ESLint 10 support. PostCSS is pinned to 8.5.31. `npm audit --omit=dev` reports no production advisories; five development dependency advisories remain through the lint toolchain's unpatched `braces` dependency.
 
 ## Security Notes
 

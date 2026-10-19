@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, useDeferredValue } from "react";
 import Link from "next/link";
-import { Folder, File, FileText, Image as ImageIcon, Film, MoreVertical, Trash, Edit, Upload, Grid, List as ListIcon, Loader2, Download, Share2, Lock, Shield, ArrowUp, Search, Eye, EyeOff, Filter, Music, Play, Pause } from "lucide-react";
+import { Folder, File, FileText, Image as ImageIcon, Film, MoreVertical, Trash, Edit, Upload, Grid, List as ListIcon, Loader2, Download, Share2, Lock, ArrowUp, Search, Eye, EyeOff, Filter, Music, Play, Pause, RefreshCw, X, ChevronLeft, ChevronRight, FolderPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -25,24 +25,29 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
-// Interface definitions
-interface FileItem {
-    name: string;
-    isDirectory: boolean;
-    size: number;
-    mimetype: string;
-    modified: string;
+import type { FileItem } from "@/lib/directory";
+import { uploadFile } from "@/lib/uploads";
+
+// Stable component identity keeps links mounted during preview and progress updates.
+function FileLink({ directory, href, children, className }: {
+    directory: boolean; href: string; children: React.ReactNode; className?: string;
+}) {
+    return directory ? <Link href={href} prefetch={false} className={className}>{children}</Link>
+        : <a href={href} className={className}>{children}</a>;
 }
 
 interface FileExplorerProps {
     initialPath?: string;
     initialFiles?: FileItem[];
     isLoggedIn?: boolean;
+    canUpload?: boolean;
+    canDelete?: boolean;
     error?: string | null;
     errorType?: "unauthorized" | "no_permissions" | "other";
 }
 
-const formatFileSize = (bytes: number) => {
+const formatFileSize = (bytes: number | null) => {
+    if (bytes === null) return "Folder";
     if (bytes === 0) return "0 Bytes";
     const k = 1024;
     const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
@@ -57,6 +62,8 @@ const formatTime = (time: number) => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
+const fileNameCollator = new Intl.Collator(undefined, { numeric: true });
+
 const PREVIEW_MAX_SIZE_BYTES = 200 * 1024 * 1024; 
 const PREVIEW_HOVER_DELAY_MS = 450; // Delay before showing preview to avoid loading on quick hovers
 const PREVIEW_WIDTH = 320;
@@ -68,14 +75,24 @@ const supportsDesktopHover = () => {
     return window.matchMedia("(hover: hover) and (pointer: fine)").matches;
 };
 
-const getPreviewUrl = (currentPath: string, fileName: string) => {
-    const encodedPath = currentPath
+const encodePathSegments = (filePath: string) =>
+    filePath
         .split("/")
         .filter(Boolean)
         .map(encodeURIComponent)
         .join("/");
+
+const getPreviewUrl = (currentPath: string, fileName: string) => {
+    const encodedPath = encodePathSegments(currentPath);
     return `/api/files/${encodedPath}/${encodeURIComponent(fileName)}`;
 };
+
+const getFilesUrl = (currentPath: string, fileName?: string) => {
+    const encodedPath = encodePathSegments(fileName ? `${currentPath}/${fileName}` : currentPath);
+    return `/files/${encodedPath}`;
+};
+
+const getApiFilesUrl = (filePath: string) => `/api/files/${encodePathSegments(filePath)}`;
 
 const VideoPreview = ({ src }: { src: string }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -377,21 +394,42 @@ const ImagePreview = ({ src }: { src: string }) => {
 };
 
 const TextPreview = ({ src }: { src: string }) => {
-    const [content, setContent] = useState<string | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [preview, setPreview] = useState<{ src: string; content: string | null; loading: boolean }>({
+        src,
+        content: null,
+        loading: true,
+    });
+
+    const isCurrentPreview = preview.src === src;
+    const content = isCurrentPreview ? preview.content : null;
+    const loading = isCurrentPreview ? preview.loading : true;
 
     useEffect(() => {
-        setLoading(true);
         const ac = new AbortController();
-        fetch(src, { signal: ac.signal })
-            .then(res => res.text())
+        fetch(src, { signal: ac.signal, headers: { Range: "bytes=0-8191" } })
+            .then(async res => {
+                if (!res.ok) throw new Error("Preview unavailable");
+                // Bound reads even if a proxy ignores Range.
+                const reader = res.body?.getReader();
+                if (!reader) return "";
+                const decoder = new TextDecoder();
+                let text = "";
+                try {
+                    while (text.length < 2000) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        text += decoder.decode(value, { stream: true });
+                    }
+                    return text.slice(0, 2000);
+                } finally { await reader.cancel(); }
+            })
             .then(text => {
-                setContent(text.slice(0, 2000)); // Limit to first 2000 chars
-                setLoading(false);
+                setPreview({ src, content: text.slice(0, 2000), loading: false });
             })
             .catch((err) => {
-                if (err.name !== "AbortError") setContent("Failed to load preview");
-                setLoading(false);
+                if (err.name !== "AbortError") {
+                    setPreview({ src, content: "Failed to load preview", loading: false });
+                }
             });
         return () => ac.abort();
     }, [src]);
@@ -411,8 +449,16 @@ const TextPreview = ({ src }: { src: string }) => {
     );
 };
 
-export default function FileExplorer({ initialPath = "public", initialFiles = [], isLoggedIn = false, error = null, errorType = "other" }: FileExplorerProps) {
-    const [currentPath, setCurrentPath] = useState(initialPath);
+export default function FileExplorer({
+    initialPath = "public",
+    initialFiles = [],
+    isLoggedIn = false,
+    canUpload = false,
+    canDelete = false,
+    error = null,
+    errorType = "other",
+}: FileExplorerProps) {
+    const currentPath = initialPath;
     const [files, setFiles] = useState<FileItem[]>(initialFiles);
     const [loading, setLoading] = useState(false);
     const [viewMode, setViewMode] = useState<"grid" | "list">("list");
@@ -423,8 +469,80 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
     const [previewsEnabled, setPreviewsEnabled] = useState(true);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const router = useRouter();
+    const deferredSearch = useDeferredValue(searchQuery);
+    const normalizedQuery = deferredSearch.toLowerCase();
+    const [page, setPage] = useState(0);
+    const [uploading, setUploading] = useState(false);
+    const [dragging, setDragging] = useState(false);
+    const uploadController = useRef<AbortController | null>(null);
+    const refreshController = useRef<AbortController | null>(null);
+    const searchInputRef = useRef<HTMLInputElement>(null);
+    const pageSize = 100;
+    const mounted = useRef(true);
+
+    useEffect(() => {
+        mounted.current = true;
+        try {
+            const saved = JSON.parse(localStorage.getItem("file-explorer-preferences") || "{}");
+            // Hydrate browser-only preferences after the server render.
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            if (["grid", "list"].includes(saved.view)) setViewMode(saved.view);
+            if (["name", "date", "size"].includes(saved.sort)) setSortMethod(saved.sort);
+            if (["asc", "desc"].includes(saved.order)) setSortOrder(saved.order);
+            if (typeof saved.previews === "boolean") setPreviewsEnabled(saved.previews);
+        } catch { /* Storage may be disabled. */ }
+        return () => {
+            mounted.current = false;
+            refreshController.current?.abort();
+            uploadController.current?.abort();
+        };
+    }, []);
+
+    const savePreferences = (change: Record<string, unknown>) => {
+        try {
+            localStorage.setItem("file-explorer-preferences", JSON.stringify({
+                view: viewMode, sort: sortMethod, order: sortOrder, previews: previewsEnabled, ...change,
+            }));
+        } catch { /* Storage may be disabled. */ }
+    };
+
+    useEffect(() => {
+        const shortcut = (event: KeyboardEvent) => {
+            const target = event.target as HTMLElement;
+            if (target.closest("input, textarea, [contenteditable=true], [role=dialog]")) return;
+            if (event.key === "/" && !event.ctrlKey && !event.metaKey) {
+                event.preventDefault();
+                searchInputRef.current?.focus();
+            }
+        };
+        window.addEventListener("keydown", shortcut);
+        return () => window.removeEventListener("keydown", shortcut);
+    }, []);
     
     const isAtRoot = currentPath === "public" || currentPath === "private";
+
+    const [folderDialogOpen, setFolderDialogOpen] = useState(false);
+    const [folderName, setFolderName] = useState("");
+    const [creatingFolder, setCreatingFolder] = useState(false);
+
+    const createFolder = async (event: React.FormEvent) => {
+        event.preventDefault();
+        if (creatingFolder) return;
+        setCreatingFolder(true);
+        try {
+            const response = await fetch("/api/folders", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ path: currentPath, name: folderName.trim() }),
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.message);
+            setFolderDialogOpen(false);
+            setFolderName("");
+            toast.success("Folder created");
+            void fetchFiles(currentPath);
+        } catch (error) { toast.error(error instanceof Error ? error.message : "Could not create folder"); }
+        finally { setCreatingFolder(false); }
+    };
 
     // Dialog States
     const [renameDialogOpen, setRenameDialogOpen] = useState(false);
@@ -530,50 +648,32 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
         };
     }, []);
 
-    // Sync state with prop if it changes (URL driven)
-    useEffect(() => {
-        setCurrentPath(initialPath);
-        if (initialFiles.length > 0) {
-            setFiles(initialFiles);
-        }
-    }, [initialPath, initialFiles]);
-
-    // Fetch Files
-    const fetchFiles = async (path: string) => {
+    // Keep the current listing visible while refreshing and cancel obsolete requests.
+    const fetchFiles = useCallback(async (path: string) => {
+        refreshController.current?.abort();
+        const controller = new AbortController();
+        refreshController.current = controller;
         setLoading(true);
         try {
-            const res = await fetch(`/api/files/${path}`);
-            if (res.status === 401) {
-                // If unauthorized and trying to access private, redirect or show error
-                if (path.startsWith("private")) {
-                    toast.error("Unauthorized access to private files");
-                    setCurrentPath("public");
-                }
-            }
+            const url = new URL(getApiFilesUrl(path), window.location.origin);
+            const password = new URLSearchParams(window.location.search).get("password");
+            if (password) url.searchParams.set("password", password);
+            const res = await fetch(url, { signal: controller.signal, cache: "no-store" });
             if (!res.ok) throw new Error("Failed to fetch files");
             const data = await res.json();
-            setFiles(data.files || []);
-        } catch (error) {
-            console.error(error);
-            toast.error("Error loading files");
-            setFiles([]);
+            if (!controller.signal.aborted) setFiles(data.files || []);
+        } catch {
+            if (!controller.signal.aborted) toast.error("Error loading files. Your current listing has been kept.");
         } finally {
-            setLoading(false);
+            if (!controller.signal.aborted) setLoading(false);
         }
-    };
-
-    useEffect(() => {
-        // Only fetch if initialFiles are empty or path changed and we don't have them
-        if (initialFiles.length === 0 || currentPath !== initialPath) {
-            fetchFiles(currentPath);
-        }
-    }, [currentPath]);
+    }, []);
 
     // Filter and Sort Logic
-    const filteredAndSortedFiles = [...files]
+    const filteredAndSortedFiles = useMemo(() => [...files]
         .filter(file => {
             // Search filter
-            if (searchQuery && !file.name.toLowerCase().includes(searchQuery.toLowerCase())) {
+            if (normalizedQuery && !file.name.toLowerCase().includes(normalizedQuery)) {
                 return false;
             }
             // Type filter
@@ -592,27 +692,17 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
             
             let res = 0;
             if (sortMethod === "name") {
-                res = a.name.localeCompare(b.name);
+                res = fileNameCollator.compare(a.name, b.name);
             } else if (sortMethod === "size") {
-                res = a.size - b.size;
+                res = (a.size ?? -1) - (b.size ?? -1);
             } else if (sortMethod === "date") {
-                res = new Date(a.modified).getTime() - new Date(b.modified).getTime();
+                res = a.modified.localeCompare(b.modified);
             }
             return sortOrder === "asc" ? res : -res;
-        });
-
-    // Navigation
-    const handleNavigate = (folderName: string) => {
-        const newPath = currentPath ? `${currentPath}/${folderName}` : folderName;
-        setCurrentPath(newPath);
-    };
-
-    const handleGoUp = () => {
-        if (currentPath === "public" || currentPath === "private") return;
-        const parts = currentPath.split("/");
-        parts.pop();
-        setCurrentPath(parts.join("/"));
-    };
+        }), [files, normalizedQuery, filterType, sortMethod, sortOrder]);
+    const pageCount = Math.max(1, Math.ceil(filteredAndSortedFiles.length / pageSize));
+    const currentPage = Math.min(page, pageCount - 1);
+    const visibleFiles = filteredAndSortedFiles.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
 
     const handleRootSwitch = (root: "public" | "private") => {
         if (root === "private" && !isLoggedIn) {
@@ -626,6 +716,7 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
     const handleTogglePreviews = () => {
         const newState = !previewsEnabled;
         setPreviewsEnabled(newState);
+        savePreferences({ previews: newState });
         toast(newState ? "Previews enabled" : "Previews disabled", {
             icon: newState ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />,
         });
@@ -635,170 +726,63 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
         }
     };
 
-    // Upload with toast progress showing speed, ETA, and size
-    const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const fileList = e.target.files;
-        if (!fileList || fileList.length === 0) return;
-
-        const file = fileList[0];
-        const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB
-        const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-        const identifier = Math.random().toString(36).substring(2) + Date.now().toString(36);
-        const startTime = Date.now();
-
-        const formatBytes = (bytes: number) => {
-            if (bytes === 0) return '0 B';
-            const k = 1024;
-            const sizes = ['B', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-        };
-
-        const formatETA = (seconds: number) => {
-            if (!isFinite(seconds) || seconds < 0) return '--:--';
-            const mins = Math.floor(seconds / 60);
-            const secs = Math.floor(seconds % 60);
-            return `${mins}:${secs.toString().padStart(2, '0')}`;
-        };
-
-        // Rolling samples for ETA: use recent throughput instead of overall average
-        const speedSamples: { t: number; b: number }[] = [];
-        const SPEED_WINDOW_MS = 3000; // use last 3s for speed
-
-        const updateToast = (toastId: string | number, bytesUploaded: number, progress: number) => {
-            const now = Date.now();
-            speedSamples.push({ t: now, b: bytesUploaded });
-            while (speedSamples.length > 1 && now - speedSamples[0].t > SPEED_WINDOW_MS) {
-                speedSamples.shift();
-            }
-            const elapsed = (now - startTime) / 1000;
-            const oldest = speedSamples[0];
-            const windowSec = speedSamples.length > 1 ? (now - oldest.t) / 1000 : 0;
-            const speed =
-                windowSec >= 0.5 && speedSamples.length > 1
-                    ? (bytesUploaded - oldest.b) / windowSec
-                    : elapsed > 0
-                      ? bytesUploaded / elapsed
-                      : 0;
-            const remaining = file.size - bytesUploaded;
-            const eta = speed > 0 ? remaining / speed : 0;
-
-            toast.loading(
-                <div className="w-full min-w-[280px]">
-                    <div className="flex justify-between text-sm mb-1">
-                        <span className="truncate max-w-[160px] font-medium">{file.name}</span>
-                        <span className="font-mono">{Math.round(progress)}%</span>
-                    </div>
-                    <div className="w-full bg-secondary h-2 rounded-full overflow-hidden mb-2">
-                        <div className="bg-primary h-full transition-all" style={{ width: `${progress}%` }} />
-                    </div>
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>{formatBytes(bytesUploaded)} / {formatBytes(file.size)}</span>
-                        <span>{formatBytes(speed)}/s • ETA {formatETA(eta)}</span>
-                    </div>
-                </div>,
-                { id: toastId, duration: Infinity }
-            );
-        };
-
-        const toastId = toast.loading(
-            <div className="w-full min-w-[280px]">
-                <div className="flex justify-between text-sm mb-1">
-                    <span className="truncate max-w-[160px] font-medium">{file.name}</span>
-                    <span className="font-mono">0%</span>
-                </div>
-                <div className="w-full bg-secondary h-2 rounded-full overflow-hidden mb-2">
-                    <div className="bg-primary h-full transition-all" style={{ width: '0%' }} />
-                </div>
-                <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>0 B / {formatBytes(file.size)}</span>
-                    <span>Calculating...</span>
-                </div>
-            </div>,
-            { duration: Infinity }
-        );
-
-        const CONCURRENCY = 2; // parallel chunk uploads
-        let completedBytes = 0;
-
-        const CHUNK_RETRIES = 3;
-        const RETRY_DELAY_MS = 2000;
-
-        const uploadChunk = async (i: number) => {
-            const start = i * CHUNK_SIZE;
-            const end = Math.min(file.size, start + CHUNK_SIZE);
-            const chunk = file.slice(start, end);
-
-            const formData = new FormData();
-            formData.append("file", chunk);
-            formData.append("chunkIndex", i.toString());
-            formData.append("totalChunks", totalChunks.toString());
-            formData.append("identifier", identifier);
-            formData.append("fileName", file.name);
-            formData.append("fileSize", file.size.toString());
-            formData.append("chunkSize", CHUNK_SIZE.toString());
-
-            let lastErr: Error | null = null;
-            for (let attempt = 1; attempt <= CHUNK_RETRIES; attempt++) {
+    const uploadFiles = async (selected: File[]) => {
+        if (!canUpload || error || uploadController.current || selected.length === 0) return;
+        const controller = new AbortController();
+        uploadController.current = controller;
+        setUploading(true);
+        const toastId = toast.loading(`Uploading ${selected.length} file${selected.length === 1 ? "" : "s"}…`);
+        let completed = 0;
+        let failed = 0;
+        try {
+            for (const file of selected) {
+                controller.signal.throwIfAborted();
+                const started = Date.now();
+                let lastUpdate = 0;
                 try {
-                    const res = await fetch(`/api/upload?path=${currentPath}`, {
-                        method: "POST",
-                        body: formData,
+                    await uploadFile(file, currentPath, controller.signal, bytes => {
+                        const now = Date.now();
+                        if (now - lastUpdate < 150 && bytes !== file.size) return;
+                        lastUpdate = now;
+                        const speed = bytes / Math.max(0.1, (now - started) / 1000);
+                        const percent = file.size ? Math.min(100, Math.round(bytes / file.size * 100)) : 100;
+                        toast.loading(`${file.name} · ${completed + failed + 1}/${selected.length}`, {
+                            id: toastId,
+                            description: `${percent}% · ${formatFileSize(bytes)} / ${formatFileSize(file.size)} · ${formatFileSize(speed)}/s${bytes === file.size ? " · Finishing…" : ""}`,
+                        });
                     });
-                    if (!res.ok) {
-                        if (res.status >= 500 && attempt < CHUNK_RETRIES) {
-                            await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
-                            continue;
-                        }
-                        throw new Error(`Failed to upload chunk ${i}`);
-                    }
-                    completedBytes += end - start;
-                    const progress = (completedBytes / file.size) * 100;
-                    updateToast(toastId, completedBytes, progress);
-                    return;
-                } catch (err) {
-                    lastErr = err instanceof Error ? err : new Error(String(err));
-                    if (attempt < CHUNK_RETRIES) {
-                        await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
-                    } else {
-                        throw lastErr;
-                    }
+                    completed++;
+                } catch (uploadError) {
+                    if (controller.signal.aborted) throw uploadError;
+                    failed++;
+                    toast.error(`${file.name}: ${uploadError instanceof Error ? uploadError.message : "Upload failed"}`);
                 }
             }
-            if (lastErr) throw lastErr;
-        };
-
-        try {
-            const indices = Array.from({ length: totalChunks }, (_, i) => i);
-            const runNext = async (): Promise<void> => {
-                const i = indices.shift();
-                if (i === undefined) return;
-                await uploadChunk(i);
-                await runNext();
-            };
-            await Promise.all(Array.from({ length: Math.min(CONCURRENCY, totalChunks) }, () => runNext()));
-
-            toast.success(
-                <div>
-                    <div className="font-medium">{file.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                        {formatBytes(file.size)} uploaded successfully
-                    </div>
-                </div>,
-                { id: toastId }
-            );
-            fetchFiles(currentPath);
-        } catch (error) {
-            console.error(error);
-            toast.error(`Failed to upload ${file.name}`, { id: toastId });
+            if (failed) toast.error(`${completed} uploaded, ${failed} failed`, { id: toastId, description: null });
+            else toast.success(`${completed} file${completed === 1 ? "" : "s"} uploaded`, { id: toastId, description: null });
+        } catch {
+            toast.info(`Upload cancelled · ${completed} completed`, { id: toastId, description: null });
         } finally {
-            if (fileInputRef.current) fileInputRef.current.value = "";
+            uploadController.current = null;
+            if (mounted.current) {
+                setUploading(false);
+                if (fileInputRef.current) fileInputRef.current.value = "";
+                void fetchFiles(currentPath);
+            }
         }
+    };
+
+    const handleUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+        void uploadFiles(Array.from(event.target.files || []));
     };
 
     // Actions
     const handleDelete = async () => {
         if (!fileToDelete) return;
+        if (!canDelete) {
+            toast.error("Delete permission required");
+            return;
+        }
         try {
             const target = `${currentPath}/${fileToDelete.name}`;
             const res = await fetch("/api/delete", {
@@ -810,13 +794,17 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
             toast.success("Deleted successfully");
             fetchFiles(currentPath);
             setDeleteDialogOpen(false);
-        } catch (error) {
+        } catch {
             toast.error("Failed to delete");
         }
     };
 
     const handleRename = async () => {
         if (!fileToRename || !newFileName) return;
+        if (!canDelete) {
+            toast.error("Rename permission required");
+            return;
+        }
         try {
             const oldPath = `${currentPath}/${fileToRename.name}`;
             const res = await fetch("/api/rename", {
@@ -832,7 +820,7 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
             toast.success("Renamed successfully");
             fetchFiles(currentPath);
             setRenameDialogOpen(false);
-        } catch (error) {
+        } catch {
             toast.error("Failed to rename");
         }
     };
@@ -854,7 +842,7 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
             const data = await res.json();
             setShareLink(`${window.location.origin}${data.link}`);
             setShareId(data.id ?? null);
-        } catch (error) {
+        } catch {
             toast.error("Failed to create share link");
         } finally {
             setIsSharing(false);
@@ -922,7 +910,13 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
 
     return (
         <>
-            <div className="flex flex-col gap-2 sm:gap-4 md:h-full">
+            <div
+                className={cn("relative flex flex-col gap-2 sm:gap-4 h-full", dragging && "outline-2 outline-dashed outline-primary outline-offset-4")}
+                onDragOver={event => { if (canUpload && !uploading && !error && event.dataTransfer.types.includes("Files")) { event.preventDefault(); setDragging(true); } }}
+                onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragging(false); }}
+                onDrop={event => { event.preventDefault(); setDragging(false); void uploadFiles(Array.from(event.dataTransfer.files)); }}
+            >
+                {dragging && <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-lg bg-background/90 text-lg font-medium">Drop files to upload</div>}
                 {/* Toolbar - compact on mobile */}
                 <div className="flex flex-col gap-2 sm:gap-3 bg-card p-2 sm:p-4 rounded-lg border shadow-sm">
                     {/* Top row - Navigation and actions */}
@@ -934,7 +928,7 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
                                     <ArrowUp className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                 </Button>
                             ) : (
-                                <Link href={`/files/${currentPath.split('/').slice(0, -1).join('/') || 'public'}`} passHref>
+                                <Link href={getFilesUrl(currentPath.split('/').slice(0, -1).join('/') || 'public')} passHref>
                                     <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-9 sm:w-9 shrink-0">
                                         <ArrowUp className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                     </Button>
@@ -964,10 +958,10 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
                             )}
 
                             <div className="flex items-center border rounded-md overflow-hidden">
-                                <Button variant={viewMode === "grid" ? "secondary" : "ghost"} size="icon" className="rounded-none h-8 w-8 sm:h-9 sm:w-9" onClick={() => setViewMode("grid")}>
+                                <Button variant={viewMode === "grid" ? "secondary" : "ghost"} size="icon" className="rounded-none h-8 w-8 sm:h-9 sm:w-9" aria-label="Grid view" onClick={() => { setViewMode("grid"); savePreferences({ view: "grid" }); }}>
                                     <Grid className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                 </Button>
-                                <Button variant={viewMode === "list" ? "secondary" : "ghost"} size="icon" className="rounded-none h-8 w-8 sm:h-9 sm:w-9" onClick={() => setViewMode("list")}>
+                                <Button variant={viewMode === "list" ? "secondary" : "ghost"} size="icon" className="rounded-none h-8 w-8 sm:h-9 sm:w-9" aria-label="List view" onClick={() => { setViewMode("list"); savePreferences({ view: "list" }); }}>
                                     <ListIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                 </Button>
                             </div>
@@ -992,41 +986,43 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
                                     <DropdownMenuLabel>Sort By</DropdownMenuLabel>
-                                    <DropdownMenuItem onClick={() => setSortMethod("name")}>
+                                    <DropdownMenuItem onClick={() => { setSortMethod("name"); savePreferences({ sort: "name" }); }}>
                                         Name {sortMethod === "name" && "✓"}
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => setSortMethod("date")}>
+                                    <DropdownMenuItem onClick={() => { setSortMethod("date"); savePreferences({ sort: "date" }); }}>
                                         Date {sortMethod === "date" && "✓"}
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => setSortMethod("size")}>
+                                    <DropdownMenuItem onClick={() => { setSortMethod("size"); savePreferences({ sort: "size" }); }}>
                                         Size {sortMethod === "size" && "✓"}
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuLabel>Order</DropdownMenuLabel>
-                                    <DropdownMenuItem onClick={() => setSortOrder("asc")}>
+                                    <DropdownMenuItem onClick={() => { setSortOrder("asc"); savePreferences({ order: "asc" }); }}>
                                         Ascending {sortOrder === "asc" && "✓"}
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => setSortOrder("desc")}>
+                                    <DropdownMenuItem onClick={() => { setSortOrder("desc"); savePreferences({ order: "desc" }); }}>
                                         Descending {sortOrder === "desc" && "✓"}
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
 
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button disabled={!isLoggedIn} variant={!isLoggedIn ? "outline" : "default"} size="sm" className={cn("h-8 px-2 text-xs sm:h-9 sm:px-3 sm:text-sm", !isLoggedIn && "opacity-50 cursor-not-allowed")}>
-                                        <Upload className="mr-1.5 h-3.5 w-3.5 sm:mr-2 sm:h-4 sm:w-4" /> Upload
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent>
-                                    <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
-                                        File Upload
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem disabled>Folder Upload (Pro)</DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
+                            {canUpload && <Button variant="outline" size="sm" disabled={!!error} onClick={() => setFolderDialogOpen(true)}><FolderPlus className="mr-1 h-4 w-4" /> New folder</Button>}
+                            <Button variant="ghost" size="icon" aria-label="Refresh files" title="Refresh files" disabled={loading || !!error} onClick={() => void fetchFiles(currentPath)}>
+                                <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+                            </Button>
+                            {uploading && <Button variant="outline" size="sm" onClick={() => uploadController.current?.abort()}><X className="mr-1 h-4 w-4" /> Cancel upload</Button>}
+                            <Button
+                                disabled={!canUpload || uploading || !!error}
+                                variant={!canUpload ? "outline" : "default"}
+                                size="sm"
+                                className={cn("h-8 px-2 text-xs sm:h-9 sm:px-3 sm:text-sm", !canUpload && "opacity-50 cursor-not-allowed")}
+                                onClick={() => fileInputRef.current?.click()}
+                            >
+                                <Upload className="mr-1.5 h-3.5 w-3.5 sm:mr-2 sm:h-4 sm:w-4" /> Upload
+                            </Button>
                             <input
                                 type="file"
+                                multiple
                                 ref={fileInputRef}
                                 className="hidden"
                                 onChange={handleUpload}
@@ -1039,9 +1035,11 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
                         <div className="relative flex-1 min-w-0">
                             <Search className="absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
                             <Input
-                                placeholder="Search files..."
+                                ref={searchInputRef}
+                                aria-label="Search files"
+                                placeholder="Search files… ( / )"
                                 value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onChange={(e) => { setSearchQuery(e.target.value); setPage(0); }}
                                 className="pl-8 h-8 sm:pl-9 sm:h-9 text-sm"
                             />
                         </div>
@@ -1054,23 +1052,23 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                                 <DropdownMenuLabel>Filter by Type</DropdownMenuLabel>
-                                <DropdownMenuItem onClick={() => setFilterType("all")}>
+                                <DropdownMenuItem onClick={() => { setPage(0); setFilterType("all"); }}>
                                     <File className="mr-2 h-4 w-4" /> All Files {filterType === "all" && "✓"}
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setFilterType("folders")}>
+                                <DropdownMenuItem onClick={() => { setPage(0); setFilterType("folders"); }}>
                                     <Folder className="mr-2 h-4 w-4" /> Folders {filterType === "folders" && "✓"}
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => setFilterType("images")}>
+                                <DropdownMenuItem onClick={() => { setPage(0); setFilterType("images"); }}>
                                     <ImageIcon className="mr-2 h-4 w-4" /> Images {filterType === "images" && "✓"}
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setFilterType("videos")}>
+                                <DropdownMenuItem onClick={() => { setPage(0); setFilterType("videos"); }}>
                                     <Film className="mr-2 h-4 w-4" /> Videos {filterType === "videos" && "✓"}
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setFilterType("audio")}>
+                                <DropdownMenuItem onClick={() => { setPage(0); setFilterType("audio"); }}>
                                     <Music className="mr-2 h-4 w-4" /> Audio {filterType === "audio" && "✓"}
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setFilterType("documents")}>
+                                <DropdownMenuItem onClick={() => { setPage(0); setFilterType("documents"); }}>
                                     <FileText className="mr-2 h-4 w-4" /> Documents {filterType === "documents" && "✓"}
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
@@ -1089,7 +1087,7 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
                             )}
                         </div>
                     </div>
-                ) : loading ? (
+                ) : loading && files.length === 0 ? (
                     <div className="flex-1 flex items-center justify-center">
                         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                     </div>
@@ -1112,21 +1110,10 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
                             viewMode === "grid" ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 sm:gap-3" : "flex flex-col gap-1.5 sm:gap-2"
                         )}
                     >
-                        {filteredAndSortedFiles.map((file) => {
-                            const fileLink = file.isDirectory
-                                ? `/files/${currentPath}/${file.name}`
-                                : `/files/${currentPath}/${file.name}`;
+                        {visibleFiles.map((file) => {
+                            const fileLink = getFilesUrl(currentPath, file.name);
 
-                            // We wrap the clickable area in a Link or a tag
-                            const Wrapper = ({ children, className }: { children: React.ReactNode, className?: string }) => {
-                                if (file.isDirectory) {
-                                    return <Link href={fileLink} className={className}>{children}</Link>;
-                                } else {
-                                    return <a href={fileLink} className={className}>{children}</a>;
-                                }
-                            };
-
-                            const isPreviewable = previewsEnabled && !file.isDirectory && file.size <= PREVIEW_MAX_SIZE_BYTES && (
+                            const isPreviewable = previewsEnabled && !file.isDirectory && (file.size ?? 0) <= PREVIEW_MAX_SIZE_BYTES && (
                                 file.mimetype.startsWith("image/") ||
                                 file.mimetype.startsWith("video/") ||
                                 file.mimetype.startsWith("audio/") ||
@@ -1147,7 +1134,7 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
                                     onMouseLeave={handleFileMouseLeave}
                                 >
                                     <div className="flex-1 flex w-full h-full items-center cursor-pointer overflow-hidden">
-                                        <Wrapper className={cn("flex-1 flex w-full h-full items-center min-w-0", viewMode === "grid" ? "flex-col justify-center p-2 sm:p-4 content-center" : "gap-2 sm:gap-4 p-2 sm:p-3")}>
+                                        <FileLink directory={file.isDirectory} href={fileLink} className={cn("flex-1 flex w-full h-full items-center min-w-0", viewMode === "grid" ? "flex-col justify-center p-2 sm:p-4 content-center" : "gap-2 sm:gap-4 p-2 sm:p-3")}>
                                             {/* Preview/Icon */}
                                             <div className="relative pointer-events-none shrink-0">
                                                 {file.isDirectory ? (
@@ -1161,14 +1148,14 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
                                                 <p className="text-xs sm:text-sm font-medium truncate w-full">{file.name}</p>
                                                 {viewMode === "list" && <p className="text-[10px] sm:text-xs text-muted-foreground">{formatFileSize(file.size)} • {new Date(file.modified).toLocaleDateString()}</p>}
                                             </div>
-                                        </Wrapper>
+                                        </FileLink>
                                     </div>
 
                                     {/* Actions Menu */}
                                     <div onClick={(e) => e.stopPropagation()} className="z-10 relative">
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity mr-1 sm:mr-2 shrink-0">
+                                                <Button aria-label={`Actions for ${file.name}`} variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity mr-1 sm:mr-2 shrink-0">
                                                     <MoreVertical className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                                 </Button>
                                             </DropdownMenuTrigger>
@@ -1178,16 +1165,22 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
                                                         <Download className="mr-2 h-4 w-4" /> Download
                                                     </DropdownMenuItem>
                                                 )}
-                                                <DropdownMenuItem onClick={() => { setFileToRename(file); setNewFileName(file.name); setRenameDialogOpen(true); }}>
-                                                    <Edit className="mr-2 h-4 w-4" /> Rename
-                                                </DropdownMenuItem>
+                                                {canDelete && (
+                                                    <DropdownMenuItem onClick={() => { setFileToRename(file); setNewFileName(file.name); setRenameDialogOpen(true); }}>
+                                                        <Edit className="mr-2 h-4 w-4" /> Rename
+                                                    </DropdownMenuItem>
+                                                )}
                                                 <DropdownMenuItem disabled={currentPath.startsWith("public")} onClick={() => !currentPath.startsWith("public") && openShareDialog(file)}>
                                                     <Share2 className="mr-2 h-4 w-4" /> Share
                                                 </DropdownMenuItem>
-                                                <DropdownMenuSeparator />
-                                                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => { setFileToDelete(file); setDeleteDialogOpen(true); }}>
-                                                    <Trash className="mr-2 h-4 w-4" /> Delete
-                                                </DropdownMenuItem>
+                                                {canDelete && (
+                                                    <>
+                                                        <DropdownMenuSeparator />
+                                                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => { setFileToDelete(file); setDeleteDialogOpen(true); }}>
+                                                            <Trash className="mr-2 h-4 w-4" /> Delete
+                                                        </DropdownMenuItem>
+                                                    </>
+                                                )}
                                             </DropdownMenuContent>
                                         </DropdownMenu>
                                     </div>
@@ -1197,7 +1190,25 @@ export default function FileExplorer({ initialPath = "public", initialFiles = []
                     </div>
                 )}
 
+                {!error && files.length > 0 && <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground" aria-live="polite">
+                    <span>{filteredAndSortedFiles.length.toLocaleString()} of {files.length.toLocaleString()} items{canUpload ? " · Drop files to upload" : ""}</span>
+                    {pageCount > 1 && <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" aria-label="Previous page" disabled={currentPage === 0} onClick={() => { setPage(currentPage - 1); closePreview(); }}><ChevronLeft className="h-4 w-4" /></Button>
+                        <span>Page {currentPage + 1} of {pageCount}</span>
+                        <Button variant="outline" size="sm" aria-label="Next page" disabled={currentPage + 1 >= pageCount} onClick={() => { setPage(currentPage + 1); closePreview(); }}><ChevronRight className="h-4 w-4" /></Button>
+                    </div>}
+                </div>}
+
                 {/* Dialogs - mobile: contain in viewport, scroll if needed */}
+                <Dialog open={folderDialogOpen} onOpenChange={setFolderDialogOpen}>
+                    <DialogContent>
+                        <DialogHeader><DialogTitle>New folder</DialogTitle><DialogDescription>Create a folder in /{currentPath}.</DialogDescription></DialogHeader>
+                        <form onSubmit={createFolder} className="space-y-4">
+                            <Input autoFocus aria-label="Folder name" value={folderName} onChange={event => setFolderName(event.target.value)} placeholder="Folder name" required />
+                            <DialogFooter><Button type="button" variant="outline" onClick={() => setFolderDialogOpen(false)}>Cancel</Button><Button type="submit" disabled={creatingFolder || !folderName.trim()}>{creatingFolder ? "Creating…" : "Create folder"}</Button></DialogFooter>
+                        </form>
+                    </DialogContent>
+                </Dialog>
                 <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
                     <DialogContent className="max-h-[85vh] overflow-y-auto w-[calc(100vw-2rem)] max-w-lg">
                         <DialogHeader>

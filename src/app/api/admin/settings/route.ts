@@ -41,7 +41,7 @@ export async function POST(req: Request) {
         }
         
         return NextResponse.json({ message: "Settings updated" });
-    } catch (e) {
+    } catch {
         return NextResponse.json({ message: "Error" }, { status: 500 });
     }
 }
